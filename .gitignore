@@ -1,0 +1,18 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pytest-tmp/
+.coverage
+htmlcov/
+.streamlit/secrets.toml
+# Public market data is versioned so the deployed dashboard receives scheduled updates.
+# Credentials and private exports must never be placed under these folders.
+logs/*
+!logs/.gitkeep
+!logs/update_status.json
+artifacts/models/*
+!artifacts/models/.gitkeep
+service-account*.json
+*.log

@@ -1,0 +1,60 @@
+name: Update stock data
+
+on:
+  schedule:
+    # GitHub cron uses UTC: 07:00, 14:00, 21:00 Asia/Taipei (UTC+8)
+    - cron: "0 23 * * *"
+    - cron: "0 6 * * *"
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: stock-data-update
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Update all available data
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          BIGQUERY_DATASET: ${{ secrets.BIGQUERY_DATASET }}
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+          FINMIND_API_TOKEN: ${{ secrets.FINMIND_API_TOKEN }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: python -m scripts.update_daily_data --trigger github
+      - name: Publish refreshed dashboard data
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/raw data/processed logs/update_status.json
+          if git diff --cached --quiet; then
+            echo "No data changes to publish."
+          else
+            git commit -m "data: scheduled market update"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+      - name: Preserve update files and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-update-${{ github.run_id }}
+          path: |
+            data/raw
+            data/processed
+            logs
+          retention-days: 14
