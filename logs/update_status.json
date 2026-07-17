@@ -1,19 +1,29 @@
 {
-  "started_at": "2026-07-16T22:30:28.119272+08:00",
-  "finished_at": "2026-07-16T22:30:28.858707+08:00",
-  "trigger": "manual",
-  "status": "failed",
-  "host": "DESKTOP-VADCFRO",
+  "started_at": "2026-07-17T15:30:18.733512+08:00",
+  "finished_at": "2026-07-17T15:30:47.591423+08:00",
+  "trigger": "github",
+  "status": "success",
+  "host": "runnervm3jd5f",
   "steps": [
     {
+      "name": "更新財經新聞",
+      "status": "success",
+      "message": "成功 0 項，失敗 0 項"
+    },
+    {
+      "name": "更新ETF熱門成交排行",
+      "status": "success",
+      "message": "成功 50 項，失敗 0 項"
+    },
+    {
       "name": "更新台股行情",
-      "status": "failed",
-      "message": "台股資料全部更新失敗：{'^TWII': '資料來源回傳空資料', '2330.TW': '資料來源回傳空資料', '2454.TW': '資料來源回傳空資料', '2317.TW': '資料來源回傳空資料', '2382.TW': '資料來源回傳空資料', '3231.TW': '資料來源回傳空資料'}"
+      "status": "success",
+      "message": "成功 101 項，失敗 0 項"
     },
     {
       "name": "更新美股與國際市場",
-      "status": "failed",
-      "message": "美股與國際市場資料全部更新失敗：{'TSM': '資料來源回傳空資料', 'NVDA': '資料來源回傳空資料', 'AMD': '資料來源回傳空資料', 'AVGO': '資料來源回傳空資料', 'MU': '資料來源回傳空資料', '^GSPC': '資料來源回傳空資料', '^NDX': '資料來源回傳空資料', '^SOX': '資料來源回傳空資料', '^VIX': '資料來源回傳空資料', 'TWD=X': '資料來源回傳空資料', '^TNX': '資料來源回傳空資料'}"
+      "status": "success",
+      "message": "成功 11 項，失敗 0 項"
     }
   ]
 }
