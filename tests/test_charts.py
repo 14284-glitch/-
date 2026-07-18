@@ -61,9 +61,17 @@ class ChartDesignTests(unittest.TestCase):
             for button in RANGE_BUTTONS if button.get("step") == "day"
         }
         self.assertEqual(day_buttons, {
+            (1, "1天", "day"), (3, "3天", "day"),
             (4, "4天", "day"), (5, "5天", "day"), (7, "7天", "day"),
             (10, "10天", "day"), (15, "15天", "day"),
         })
+
+    def test_every_chart_defaults_to_one_day(self) -> None:
+        for figure in (price_chart(self.frame, "測試"), volume_chart(self.frame), kd_chart(self.frame),
+                       macd_chart(self.frame), rsi_chart(self.frame)):
+            self.assertEqual(figure.layout.xaxis.rangeselector.buttons[0].label, "1天")
+            start, end = pd.to_datetime(list(figure.layout.xaxis.range))
+            self.assertEqual((end - start).days, 1)
 
     def test_prediction_chart_distinguishes_all_required_series(self) -> None:
         prediction = pd.DataFrame({
