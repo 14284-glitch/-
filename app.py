@@ -52,6 +52,7 @@ def main() -> None:
         [data-testid="stPlotlyChart"] { width: 100% !important; }
         [data-testid="stMetric"] { min-width: 0; }
         [data-testid="stMetricValue"] { font-size: clamp(1.15rem, 4vw, 2rem); }
+        .mobile-chart-hint { display: none; }
         @media (max-width: 768px) {
             [data-testid="stAppViewContainer"] .main .block-container {
                 padding-left: .75rem; padding-right: .75rem; padding-top: .75rem;
@@ -64,6 +65,21 @@ def main() -> None:
             .stButton > button { min-height: 44px; width: 100%; }
             [data-baseweb="select"] { min-height: 44px; }
             [data-testid="stDataFrame"] { overflow-x: auto; }
+            /* Keep every financial chart landscape and scroll only inside its chart area. */
+            [data-testid="stPlotlyChart"] {
+                width: 100% !important; overflow-x: auto !important; overflow-y: hidden;
+                -webkit-overflow-scrolling: touch; border: 1px solid rgba(127,127,127,.18);
+                border-radius: .4rem;
+            }
+            [data-testid="stPlotlyChart"] > div,
+            [data-testid="stPlotlyChart"] .js-plotly-plot {
+                min-width: 760px !important; width: 760px !important;
+            }
+            .mobile-chart-hint {
+                display: block; margin: .25rem 0 .4rem; padding: .4rem .6rem;
+                background: rgba(31,119,180,.08); border-radius: .35rem;
+                font-size: .9rem;
+            }
         }
         </style>
         """,
@@ -97,7 +113,7 @@ def main() -> None:
     st.sidebar.divider()
     st.sidebar.caption(f"目前台北時間：{datetime.now(ZoneInfo('Asia/Taipei')):%Y-%m-%d %H:%M:%S}")
     st.sidebar.caption("本系統僅供研究，不構成投資建議。")
-    st.sidebar.caption("介面版本：2026.07.18-18")
+    st.sidebar.caption("介面版本：2026.07.18-19")
 
 
 if __name__ == "__main__":

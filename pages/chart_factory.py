@@ -31,6 +31,7 @@ DATE_TICK_FORMAT_STOPS = [
 def apply_chart_layout(figure: go.Figure, title: str, y_title: str, rangeslider: bool = True) -> go.Figure:
     figure.update_layout(
         title=dict(text=title, x=0.01), template="plotly_white", hovermode="x",
+        height=520, autosize=True,
         paper_bgcolor=COLORS["layout"]["background"], plot_bgcolor=COLORS["layout"]["background"],
         hoverlabel=dict(
             bgcolor=COLORS["layout"]["tooltip_background"],

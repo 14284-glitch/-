@@ -49,6 +49,10 @@ def render_chart_with_legend(figure: go.Figure, items: tuple[LegendItem, ...], d
         st.info(f"指定日期：{selected_date:%Y/%m/%d}｜" + "｜".join(selected_values[:6]))
     chart_column, legend_column = st.columns([78, 22], gap="medium", vertical_alignment="top")
     with chart_column:
+        st.markdown(
+            '<div class="mobile-chart-hint">↔ 圖表維持橫向顯示，請在圖表區左右滑動；下方拉桿可調整日期位置。</div>',
+            unsafe_allow_html=True,
+        )
         st.plotly_chart(figure, width="stretch", config=PLOTLY_CONFIG)
     with legend_column:
         st.markdown("#### 本圖圖例")

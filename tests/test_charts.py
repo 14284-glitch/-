@@ -52,6 +52,7 @@ class ChartDesignTests(unittest.TestCase):
             self.assertEqual(figure.layout.hoverlabel.bgcolor, COLORS["layout"]["tooltip_background"])
             self.assertEqual(figure.layout.hoverlabel.font.color, COLORS["layout"]["tooltip_text"])
             self.assertTrue(figure.layout.xaxis.showspikes)
+            self.assertGreaterEqual(figure.layout.height, 480)
 
     def test_range_selector_has_requested_day_intervals(self) -> None:
         day_buttons = {
