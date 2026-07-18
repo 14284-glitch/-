@@ -42,6 +42,7 @@ class ChartDesignTests(unittest.TestCase):
             self.assertEqual(figure.layout.legend.orientation, "v")
             self.assertGreater(float(figure.layout.legend.x), 1.0)
             self.assertGreater(len(figure.layout.xaxis.rangeselector.buttons), 0)
+            self.assertTrue(figure.layout.xaxis.rangeslider.visible)
             self.assertFalse(figure.layout.yaxis.fixedrange)
             self.assertEqual(figure.layout.xaxis.tickformat, "%Y/%m/%d")
             self.assertEqual(figure.layout.xaxis.hoverformat, "%Y/%m/%d")
