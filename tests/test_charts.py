@@ -109,6 +109,12 @@ class ChartDesignTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertNotIn("st.plotly_chart", text)
             self.assertIn("render_chart_with_legend", text)
+
+    def test_external_legend_layout_gives_chart_most_of_the_width(self) -> None:
+        pages_dir = Path(__file__).parents[1] / "pages"
+        text = (pages_dir / "glossary.py").read_text(encoding="utf-8")
+        self.assertIn("st.columns([84, 16]", text)
+        self.assertIn("margin=dict(l=50, r=18", text)
         for filename in ("market_overview.py", "prediction_dashboard.py"):
             text = (pages_dir / filename).read_text(encoding="utf-8")
             self.assertNotIn("st.plotly_chart", text)

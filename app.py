@@ -65,15 +65,15 @@ def main() -> None:
             .stButton > button { min-height: 44px; width: 100%; }
             [data-baseweb="select"] { min-height: 44px; }
             [data-testid="stDataFrame"] { overflow-x: auto; }
-            /* Keep every financial chart landscape and scroll only inside its chart area. */
+            /* Fit every chart to the phone screen without widening the whole page. */
             [data-testid="stPlotlyChart"] {
-                width: 100% !important; overflow-x: auto !important; overflow-y: hidden;
-                -webkit-overflow-scrolling: touch; border: 1px solid rgba(127,127,127,.18);
+                width: 100% !important; max-width: 100% !important; overflow: hidden;
+                border: 1px solid rgba(127,127,127,.18);
                 border-radius: .4rem;
             }
             [data-testid="stPlotlyChart"] > div,
             [data-testid="stPlotlyChart"] .js-plotly-plot {
-                min-width: 760px !important; width: 760px !important;
+                min-width: 0 !important; width: 100% !important; max-width: 100% !important;
             }
             .mobile-chart-hint {
                 display: block; margin: .25rem 0 .4rem; padding: .4rem .6rem;
@@ -113,7 +113,7 @@ def main() -> None:
     st.sidebar.divider()
     st.sidebar.caption(f"目前台北時間：{datetime.now(ZoneInfo('Asia/Taipei')):%Y-%m-%d %H:%M:%S}")
     st.sidebar.caption("本系統僅供研究，不構成投資建議。")
-    st.sidebar.caption("介面版本：2026.07.18-19")
+    st.sidebar.caption("介面版本：2026.07.18-20")
 
 
 if __name__ == "__main__":

@@ -47,10 +47,12 @@ def render_chart_with_legend(figure: go.Figure, items: tuple[LegendItem, ...], d
         )
         selected_values = _values_for_date(figure, selected_timestamp)
         st.info(f"指定日期：{selected_date:%Y/%m/%d}｜" + "｜".join(selected_values[:6]))
-    chart_column, legend_column = st.columns([78, 22], gap="medium", vertical_alignment="top")
+    # The chart receives most of the desktop width; the external legend stays readable on the right.
+    chart_column, legend_column = st.columns([84, 16], gap="small", vertical_alignment="top")
     with chart_column:
+        figure.update_layout(margin=dict(l=50, r=18, t=70, b=45), autosize=True)
         st.markdown(
-            '<div class="mobile-chart-hint">↔ 圖表維持橫向顯示，請在圖表區左右滑動；下方拉桿可調整日期位置。</div>',
+            '<div class="mobile-chart-hint">圖表會依手機螢幕寬度自動縮放；下方拉桿可調整日期位置。</div>',
             unsafe_allow_html=True,
         )
         st.plotly_chart(figure, width="stretch", config=PLOTLY_CONFIG)
