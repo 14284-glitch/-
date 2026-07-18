@@ -8,6 +8,11 @@ from config.indicator_glossary import bilingual
 
 
 RANGE_BUTTONS = [
+    dict(count=4, label="4天", step="day", stepmode="backward"),
+    dict(count=5, label="5天", step="day", stepmode="backward"),
+    dict(count=7, label="7天", step="day", stepmode="backward"),
+    dict(count=10, label="10天", step="day", stepmode="backward"),
+    dict(count=15, label="15天", step="day", stepmode="backward"),
     dict(count=1, label="1月", step="month", stepmode="backward"),
     dict(count=3, label="3月", step="month", stepmode="backward"),
     dict(count=6, label="6月", step="month", stepmode="backward"),

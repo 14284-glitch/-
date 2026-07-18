@@ -7,7 +7,7 @@ import pandas as pd
 from config.color_config import COLORS, LINE_STYLES
 from config.indicator_glossary import INDICATOR_GLOSSARY, bilingual
 from features.technical_indicators import add_technical_indicators
-from pages.chart_factory import kd_chart, macd_chart, prediction_chart, price_chart, rsi_chart, volume_chart
+from pages.chart_factory import RANGE_BUTTONS, kd_chart, macd_chart, prediction_chart, price_chart, rsi_chart, volume_chart
 
 
 def sample_prices(rows: int = 260) -> pd.DataFrame:
@@ -51,6 +51,16 @@ class ChartDesignTests(unittest.TestCase):
             self.assertEqual(figure.layout.hoverlabel.bgcolor, COLORS["layout"]["tooltip_background"])
             self.assertEqual(figure.layout.hoverlabel.font.color, COLORS["layout"]["tooltip_text"])
             self.assertTrue(figure.layout.xaxis.showspikes)
+
+    def test_range_selector_has_requested_day_intervals(self) -> None:
+        day_buttons = {
+            (button["count"], button["label"], button["step"])
+            for button in RANGE_BUTTONS if button.get("step") == "day"
+        }
+        self.assertEqual(day_buttons, {
+            (4, "4天", "day"), (5, "5天", "day"), (7, "7天", "day"),
+            (10, "10天", "day"), (15, "15天", "day"),
+        })
 
     def test_prediction_chart_distinguishes_all_required_series(self) -> None:
         prediction = pd.DataFrame({
