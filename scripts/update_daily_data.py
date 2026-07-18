@@ -11,6 +11,9 @@ import sys
 from typing import Callable
 from zoneinfo import ZoneInfo
 
+import exchange_calendars as xcals
+import pandas as pd
+
 from config.settings import PROJECT_ROOT, get_settings
 from utils.logging_config import configure_logging
 
@@ -18,6 +21,7 @@ from utils.logging_config import configure_logging
 TAIPEI = ZoneInfo("Asia/Taipei")
 STATUS_PATH = PROJECT_ROOT / "logs" / "update_status.json"
 LOCK_PATH = PROJECT_ROOT / "logs" / "update.lock"
+TW_CALENDAR = xcals.get_calendar("XTAI")
 
 
 @dataclass
@@ -54,6 +58,15 @@ class UpdateLock:
 
     def __exit__(self, *_: object) -> None:
         LOCK_PATH.unlink(missing_ok=True)
+
+
+def is_tw_market_open(now: datetime | None = None) -> bool:
+    """Return True only while the Taiwan Stock Exchange is in a live session."""
+    taipei_now = now or datetime.now(TAIPEI)
+    if taipei_now.tzinfo is None:
+        taipei_now = taipei_now.replace(tzinfo=TAIPEI)
+    utc_minute = pd.Timestamp(taipei_now).tz_convert("UTC").floor("min")
+    return bool(TW_CALENDAR.is_open_on_minute(utc_minute))
 
 
 def run_update(trigger: str = "manual", steps: list[tuple[str, Callable[[], object]]] | None = None) -> UpdateResult:
@@ -125,8 +138,16 @@ def _short_message(detail: object) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--trigger", default="manual", choices=("manual", "schedule", "github"))
+    parser.add_argument("--trigger", default="manual", choices=("manual", "schedule", "market", "github"))
+    parser.add_argument(
+        "--market-open-only",
+        action="store_true",
+        help="僅在臺灣證券交易所開市時執行；休市時安全略過。",
+    )
     args = parser.parse_args()
+    if args.market_open_only and not is_tw_market_open():
+        print("臺灣證券交易所目前未開市，本次更新已略過。")
+        return 0
     try:
         result = run_update(args.trigger)
     except UpdateAlreadyRunning as exc:

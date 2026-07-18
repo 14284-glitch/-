@@ -128,7 +128,7 @@ pytest -q
 
 啟動網頁後，首頁會顯示最後更新時間、每個更新步驟的成功或失敗狀態，並提供「立即更新所有資料」按鈕。更新程序具備互斥鎖，連續按鈕或排程重疊時不會同時覆寫檔案。
 
-GitHub Actions 已設定台北時間每日三次更新：
+Windows 本機排程會在臺灣證券交易所開市期間每 3 分鐘更新；系統使用交易所行事曆判斷交易日與開市時間，週末及休市日會自動略過。另保留每日三次完整更新：
 
 - 07:00：美股收盤後與台股開盤前更新
 - 14:00：台股收盤後更新
@@ -143,7 +143,7 @@ cd C:\Users\USER\Documents\股票\stock-predictor
 powershell -ExecutionPolicy Bypass -File .\scripts\register_windows_schedule.ps1
 ```
 
-排程電腦必須在執行時間開機且可連線。設定使用 `StartWhenAvailable`，錯過執行時間後會在電腦恢復可用時補跑；重疊更新會自動忽略第二個程序。
+排程電腦必須在執行時間開機且可連線。設定使用 `StartWhenAvailable`，錯過執行時間後會在電腦恢復可用時補跑；重疊更新會自動忽略第二個程序。GitHub Actions 的最短排程間隔為 5 分鐘；若公開網站也必須精確每 3 分鐘更新，部署時需使用 Google Cloud Scheduler 呼叫相同更新命令。
 
 手動命令更新：
 
