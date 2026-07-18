@@ -54,19 +54,19 @@ def render_chart_with_legend(figure: go.Figure, items: tuple[LegendItem, ...], d
         st.markdown("#### 顯示範圍")
         if y_minimum is not None and y_maximum is not None:
             span = y_maximum - y_minimum
-            padding = span * 0.03
-            lower_limit = float(y_minimum - padding)
-            upper_limit = float(y_maximum + padding)
-            selected_range = st.slider(
-                "調整縱軸範圍",
-                min_value=lower_limit,
-                max_value=upper_limit,
-                value=(lower_limit, upper_limit),
-                step=max(span / 200, 0.001),
+            padding_percent = st.slider(
+                "頂點保護留白",
+                min_value=2,
+                max_value=30,
+                value=6,
+                step=1,
                 key=f"y_range_{date_key}",
-                help="拖曳左右兩端可設定圖表顯示的最低值與最高值；雙擊圖表可恢復自動範圍。",
+                help="調整最高點與最低點外側的留白。資料頂點永遠保留，不會因放大縮小被裁切。",
             )
-            figure.update_yaxes(range=list(selected_range), autorange=False)
+            padding = max(span * padding_percent / 100, abs(y_maximum) * 0.005, 0.01)
+            protected_range = [float(y_minimum - padding), float(y_maximum + padding)]
+            figure.update_yaxes(range=protected_range, autorange=False, fixedrange=False)
+            st.caption(f"最高點 {y_maximum:,.2f}、最低點 {y_minimum:,.2f} 均受保護")
         else:
             st.caption("本圖沒有可調整的數值範圍。")
     with chart_column:

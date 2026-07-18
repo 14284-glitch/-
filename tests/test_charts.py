@@ -128,6 +128,19 @@ class ChartDesignTests(unittest.TestCase):
         self.assertIsNotNone(maximum)
         self.assertLess(minimum, maximum)
 
+    def test_chart_range_protection_keeps_highest_and_lowest_points_visible(self) -> None:
+        figure = price_chart(self.frame, "測試")
+        minimum, maximum = _figure_y_bounds(figure)
+        span = maximum - minimum
+        padding = max(span * 0.06, abs(maximum) * 0.005, 0.01)
+        protected_range = [minimum - padding, maximum + padding]
+        self.assertLess(protected_range[0], minimum)
+        self.assertGreater(protected_range[1], maximum)
+
+        glossary_source = (Path(__file__).parents[1] / "pages" / "glossary.py").read_text(encoding="utf-8")
+        self.assertIn("頂點保護留白", glossary_source)
+        self.assertIn("protected_range", glossary_source)
+
 
 if __name__ == "__main__":
     unittest.main()
