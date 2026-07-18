@@ -1,0 +1,19 @@
+-r requirements.txt
+
+# Google Cloud / BigQuery (optional deployment backend)
+google-cloud-bigquery>=3.25,<4.0
+google-cloud-bigquery-storage>=2.25,<3.0
+google-auth>=2.33,<3.0
+
+# Machine learning development
+scikit-learn>=1.5,<2.0
+xgboost>=2.1,<4.0
+joblib>=1.4,<2.0
+imbalanced-learn>=0.12,<1.0
+
+# Configuration and development tooling
+pydantic>=2.8,<3.0
+pydantic-settings>=2.4,<3.0
+structlog>=24.4,<26.0
+pytest>=8.3,<9.0
+pytest-cov>=5.0,<7.0
