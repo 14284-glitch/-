@@ -8,6 +8,7 @@ from config.color_config import COLORS, LINE_STYLES
 from config.indicator_glossary import INDICATOR_GLOSSARY, bilingual
 from features.technical_indicators import add_technical_indicators
 from pages.chart_factory import RANGE_BUTTONS, kd_chart, macd_chart, prediction_chart, price_chart, rsi_chart, volume_chart
+from pages.glossary import _figure_y_bounds
 
 
 def sample_prices(rows: int = 260) -> pd.DataFrame:
@@ -119,6 +120,13 @@ class ChartDesignTests(unittest.TestCase):
             text = (pages_dir / filename).read_text(encoding="utf-8")
             self.assertNotIn("st.plotly_chart", text)
             self.assertIn("render_chart_with_legend", text)
+
+    def test_right_side_range_slider_can_derive_chart_bounds(self) -> None:
+        figure = price_chart(self.frame, "測試")
+        minimum, maximum = _figure_y_bounds(figure)
+        self.assertIsNotNone(minimum)
+        self.assertIsNotNone(maximum)
+        self.assertLess(minimum, maximum)
 
 
 if __name__ == "__main__":

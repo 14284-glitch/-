@@ -49,6 +49,26 @@ def render_chart_with_legend(figure: go.Figure, items: tuple[LegendItem, ...], d
         st.info(f"指定日期：{selected_date:%Y/%m/%d}｜" + "｜".join(selected_values[:6]))
     # The chart receives most of the desktop width; the external legend stays readable on the right.
     chart_column, legend_column = st.columns([84, 16], gap="small", vertical_alignment="top")
+    y_minimum, y_maximum = _figure_y_bounds(figure)
+    with legend_column:
+        st.markdown("#### 顯示範圍")
+        if y_minimum is not None and y_maximum is not None:
+            span = y_maximum - y_minimum
+            padding = span * 0.03
+            lower_limit = float(y_minimum - padding)
+            upper_limit = float(y_maximum + padding)
+            selected_range = st.slider(
+                "調整縱軸範圍",
+                min_value=lower_limit,
+                max_value=upper_limit,
+                value=(lower_limit, upper_limit),
+                step=max(span / 200, 0.001),
+                key=f"y_range_{date_key}",
+                help="拖曳左右兩端可設定圖表顯示的最低值與最高值；雙擊圖表可恢復自動範圍。",
+            )
+            figure.update_yaxes(range=list(selected_range), autorange=False)
+        else:
+            st.caption("本圖沒有可調整的數值範圍。")
     with chart_column:
         figure.update_layout(margin=dict(l=50, r=18, t=70, b=45), autosize=True)
         st.markdown(
@@ -84,6 +104,28 @@ def render_chart_with_legend(figure: go.Figure, items: tuple[LegendItem, ...], d
             ".legend-help:hover .legend-tip,.legend-help:focus .legend-tip{display:block;}"
             "</style>" + "".join(blocks)
         )
+
+
+def _figure_y_bounds(figure: go.Figure) -> tuple[float | None, float | None]:
+    """Return finite visible y bounds for scatter, bar and candlestick traces."""
+    values: list[float] = []
+    for trace in figure.data:
+        if trace.name == "觀看提醒":
+            continue
+        candidates = []
+        for field in ("y", "high", "low"):
+            series = getattr(trace, field, None)
+            if series is not None:
+                candidates.extend(list(series))
+        numeric = pd.to_numeric(pd.Series(candidates), errors="coerce").dropna()
+        values.extend(float(value) for value in numeric if pd.notna(value))
+    if not values:
+        return None, None
+    minimum, maximum = min(values), max(values)
+    if minimum == maximum:
+        margin = max(abs(minimum) * 0.05, 1.0)
+        return minimum - margin, maximum + margin
+    return minimum, maximum
 
 
 def _values_for_date(figure: go.Figure, selected_date: pd.Timestamp) -> list[str]:
