@@ -33,6 +33,7 @@ PLOTLY_CONFIG = {
     "displaylogo": False,
     "scrollZoom": False,
     "doubleClick": False,
+    "editable": False,
     "responsive": True,
     "modeBarButtonsToRemove": [
         "zoom2d", "pan2d", "zoomIn2d", "zoomOut2d",

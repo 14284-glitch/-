@@ -75,6 +75,13 @@ def main() -> None:
             [data-testid="stPlotlyChart"] .js-plotly-plot {
                 min-width: 0 !important; width: 100% !important; max-width: 100% !important;
             }
+            /* On phones the chart never captures pinch/drag zoom; only vertical page scrolling remains. */
+            [data-testid="stPlotlyChart"],
+            [data-testid="stPlotlyChart"] .js-plotly-plot,
+            [data-testid="stPlotlyChart"] .draglayer,
+            [data-testid="stPlotlyChart"] .nsewdrag {
+                touch-action: pan-y !important;
+            }
             .mobile-chart-hint {
                 display: block; margin: .25rem 0 .4rem; padding: .4rem .6rem;
                 background: rgba(31,119,180,.08); border-radius: .35rem;
@@ -113,7 +120,7 @@ def main() -> None:
     st.sidebar.divider()
     st.sidebar.caption(f"目前台北時間：{datetime.now(ZoneInfo('Asia/Taipei')):%Y-%m-%d %H:%M:%S}")
     st.sidebar.caption("本系統僅供研究，不構成投資建議。")
-    st.sidebar.caption("介面版本：2026.07.24-30")
+    st.sidebar.caption("介面版本：2026.07.24-31")
 
 
 if __name__ == "__main__":

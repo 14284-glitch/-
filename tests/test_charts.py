@@ -151,8 +151,13 @@ class ChartDesignTests(unittest.TestCase):
 
         self.assertFalse(PLOTLY_CONFIG["scrollZoom"])
         self.assertFalse(PLOTLY_CONFIG["doubleClick"])
+        self.assertFalse(PLOTLY_CONFIG["editable"])
         for button in ("zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d"):
             self.assertIn(button, PLOTLY_CONFIG["modeBarButtonsToRemove"])
+
+    def test_mobile_charts_ignore_pinch_and_drag_zoom(self) -> None:
+        app_source = (Path(__file__).parents[1] / "app.py").read_text(encoding="utf-8")
+        self.assertIn("touch-action: pan-y !important", app_source)
 
 
 if __name__ == "__main__":
