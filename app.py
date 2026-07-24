@@ -1,6 +1,7 @@
 """Streamlit web entry point for the Taiwan stock prediction platform."""
 
 from datetime import datetime
+import json
 import os
 import sqlite3
 from zoneinfo import ZoneInfo
@@ -10,11 +11,16 @@ import streamlit as st
 from config.color_config import COLORS
 from config.settings import PROJECT_ROOT, get_settings
 from pages import backtest_dashboard, financial_news, market_overview, prediction_dashboard, stock_analysis
-from scripts.update_daily_data import (
-    UpdateAlreadyRunning,
-    read_last_status,
-    start_background_update,
-)
+
+
+def _read_update_status_safely() -> dict:
+    """Read update status without importing the optional update backend."""
+    status_path = PROJECT_ROOT / "logs" / "update_status.json"
+    try:
+        payload = json.loads(status_path.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else {}
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {}
 
 
 def render_system_status() -> None:
@@ -22,16 +28,24 @@ def render_system_status() -> None:
     st.info("系統每天於台北時間 07:00、14:00、21:00 自動更新，也可隨時手動更新。")
     if st.button("🔄 立即更新所有資料", type="primary", width="stretch"):
         try:
+            # Load the update backend only when requested. An optional cloud
+            # dependency must not prevent the rest of the dashboard from opening.
+            from scripts.update_daily_data import start_background_update
+
             start_background_update(trigger="manual")
             st.session_state["manual_update_started"] = True
-        except UpdateAlreadyRunning as exc:
-            st.warning(str(exc))
+        except Exception as exc:
+            if exc.__class__.__name__ == "UpdateAlreadyRunning":
+                st.warning(str(exc))
+            else:
+                st.error("手動更新服務目前無法啟動，但其他頁面仍可正常使用。請稍後再試。")
+                st.caption(f"系統診斷：{exc.__class__.__name__}: {exc}")
         st.rerun()
     if st.session_state.pop("manual_update_started", False):
         st.success("手動更新已在背景啟動。可繼續瀏覽頁面，稍後按下方按鈕查看結果。")
     if st.button("查看最新更新進度", width="stretch"):
         st.rerun()
-    status = read_last_status()
+    status = _read_update_status_safely()
     if not status:
         st.warning("尚無更新紀錄。")
         return
@@ -188,7 +202,7 @@ def main() -> None:
     st.sidebar.divider()
     st.sidebar.caption(f"目前台北時間：{datetime.now(ZoneInfo('Asia/Taipei')):%Y-%m-%d %H:%M:%S}")
     st.sidebar.caption("本系統僅供研究，不構成投資建議。")
-    st.sidebar.caption("介面版本：2026.07.24-40（手動更新修正版）")
+    st.sidebar.caption("介面版本：2026.07.24-41（雲端啟動修正版）")
 
 
 if __name__ == "__main__":
