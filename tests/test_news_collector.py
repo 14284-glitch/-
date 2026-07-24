@@ -43,3 +43,9 @@ def test_home_page_reads_news_cache_before_manual_refresh():
     page_source = (Path(__file__).parents[1] / "pages" / "financial_news.py").read_text(encoding="utf-8")
     assert "return load_news_cache()" in page_source
     assert "collect_financial_news()" in page_source
+
+
+def test_news_category_and_source_reject_custom_text():
+    page_source = (Path(__file__).parents[1] / "pages" / "financial_news.py").read_text(encoding="utf-8")
+    assert page_source.count("accept_new_options=False") == 2
+    assert page_source.count("filter_mode=None") == 2

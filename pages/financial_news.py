@@ -47,9 +47,21 @@ def render() -> None:
         "投資人－股魚", "投資人－陳重銘", "投資人－施昇輝", "投資人－華倫老師（周文偉）",
     ]
     left, middle, right = st.columns([1, 1.4, 2])
-    category = left.selectbox("新聞分類", categories)
+    category = left.selectbox(
+        "新聞分類",
+        categories,
+        accept_new_options=False,
+        filter_mode=None,
+        help="只能從既有分類中選取，無法新增或修改文字。",
+    )
     sources = sorted({str(item.get("source", "來源未提供")) for item in items})
-    source = middle.selectbox("新聞來源", ["全部新聞來源"] + sources)
+    source = middle.selectbox(
+        "新聞來源",
+        ["全部新聞來源"] + sources,
+        accept_new_options=False,
+        filter_mode=None,
+        help="只能從既有新聞來源中選取，無法新增或修改文字。",
+    )
     keyword = right.text_input("關鍵字篩選", placeholder="例如：台積電、AI、利率")
     now = datetime.now(TAIPEI)
     if category == "本日頭條新聞":
