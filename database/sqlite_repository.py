@@ -108,7 +108,7 @@ class SQLiteRepository:
                     connection, path, "macro_observation",
                     ["series_id", "observation_date", "vintage_start_date"],
                 )
-            financial_path = PROJECT_ROOT / "data" / "processed" / "financial_features.csv"
+            financial_path = raw_root.parent / "processed" / "financial_features.csv"
             if financial_path.exists():
                 counts["financial_rows"] = self._upsert_generic_csv(
                     connection, financial_path, "financial_statement",
