@@ -2,14 +2,14 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import streamlit as st
-from collectors.news_collector import EXCLUDED_TERMS, collect_financial_news
+from collectors.news_collector import EXCLUDED_TERMS, collect_financial_news, load_news_cache
 
 TAIPEI = ZoneInfo("Asia/Taipei")
 
 
 @st.cache_data(ttl=600, show_spinner=False)
 def _load_news() -> dict[str, object]:
-    return collect_financial_news()
+    return load_news_cache()
 
 
 def _time(value: str) -> str:
@@ -30,6 +30,8 @@ def render() -> None:
     st.header("財經新聞")
     st.caption("彙整公開 RSS 新聞標題與摘要；點選標題可前往原始新聞來源。")
     if st.button("立即更新新聞", type="primary"):
+        with st.spinner("正在更新財經新聞……"):
+            collect_financial_news()
         _load_news.clear()
         st.rerun()
     try:

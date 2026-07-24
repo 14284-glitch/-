@@ -29,3 +29,17 @@ def test_collector_uses_existing_cache_when_all_sources_fail(tmp_path: Path):
     result = collect_financial_news(cache, [("失敗來源", "台股市場", "http://127.0.0.1:1/fail")], timeout=0.01)
     assert result["using_cache"] is True
     assert result["items"][0]["title"] == "舊聞"
+
+
+def test_financial_news_is_rendered_on_home_page():
+    app_source = (Path(__file__).parents[1] / "app.py").read_text(encoding="utf-8")
+    assert "def render_home()" in app_source
+    assert "financial_news.render()" in app_source
+    assert '("首頁", "個股分析", "模型預測", "策略回測", "系統狀態")' in app_source
+    assert '"財經新聞": financial_news.render' not in app_source
+
+
+def test_home_page_reads_news_cache_before_manual_refresh():
+    page_source = (Path(__file__).parents[1] / "pages" / "financial_news.py").read_text(encoding="utf-8")
+    assert "return load_news_cache()" in page_source
+    assert "collect_financial_news()" in page_source
