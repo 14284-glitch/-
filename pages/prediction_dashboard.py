@@ -10,12 +10,18 @@ import streamlit as st
 from config.color_config import COLORS
 from config.settings import PROJECT_ROOT
 from config.universe import TAIWAN_50_CONSTITUENTS, load_popular_etfs
+from models.price_average_estimator import RANGE_PERCENT, estimate_universe
 from pages.chart_factory import prediction_chart
 from pages.glossary import prediction_legend_items, render_chart_with_legend, render_glossary
 from pages.stock_analysis import _sort_stocks_by_popularity
 
 PREDICTION_PATH = PROJECT_ROOT / "data" / "processed" / "latest_prediction.csv"
 CHART_COLUMNS = {"trade_date", "actual_price", "predicted_price", "prediction_upper", "prediction_lower"}
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _cached_average_estimates(universe_items: tuple[tuple[str, str], ...]) -> pd.DataFrame:
+    return estimate_universe(dict(universe_items), PROJECT_ROOT / "data" / "raw" / "tw")
 
 
 def load_prediction_data(path: Path = PREDICTION_PATH) -> tuple[pd.DataFrame, str | None]:
@@ -61,73 +67,86 @@ def _empty_state(message: str) -> None:
 
 def render() -> None:
     st.header("模型預測")
-    st.info("⏳ 正在訓練模型中")
-    st.caption("模型完成時間序列驗證與未來資料防護測試後，才會開放正式預測結果。")
-    st.progress(45, text="目前進度：技術特徵、預測目標與 Logistic Regression 建置中")
-    st.warning("訓練完成前不顯示示範值或未驗證的預測，避免造成誤解。")
-    return
-
-    category = st.selectbox(
-        "第一步：選擇預測標的類別",
-        ("臺灣50成分股（50檔）", "臺灣市場熱門ETF（50檔）"),
-        help="兩組名單與個股分析頁相同，並依目前熱門度排列。",
+    st.subheader("3、7、14日平均價區間估算")
+    st.caption(
+        "依截至資料日最近3、7、14個交易日收盤平均價計算；"
+        f"下界＝平均價的 {1 - RANGE_PERCENT:.0%}，上界＝平均價的 {1 + RANGE_PERCENT:.0%}。"
     )
-    if category == "臺灣50成分股（50檔）":
+    category = st.selectbox(
+        "選擇估算標的類別",
+        ("全部個股與ETF（100檔）", "臺灣50成分股（50檔）", "臺灣市場熱門ETF（50檔）"),
+        accept_new_options=False,
+        filter_mode=None,
+    )
+    stocks = _sort_stocks_by_popularity(TAIWAN_50_CONSTITUENTS)
+    etfs = load_popular_etfs()
+    if category == "全部個股與ETF（100檔）":
+        universe = {**stocks, **etfs}
+    elif category == "臺灣50成分股（50檔）":
         universe = _sort_stocks_by_popularity(TAIWAN_50_CONSTITUENTS)
-        ranking_note = "依最近20個交易日平均成交金額排序"
     else:
-        universe = load_popular_etfs()
-        ranking_note = "依證交所最新交易日成交金額排序"
-    labels = {
-        f"{rank:02d}｜{name}（{symbol.removesuffix('.TW')}）": symbol
-        for rank, (symbol, name) in enumerate(universe.items(), start=1)
-    }
-    selected_label = st.selectbox("第二步：選擇預測標的", list(labels))
-    selected_symbol = labels[selected_label]
-    st.caption(f"目前類別：{category}｜共 {len(universe)} 檔｜{ranking_note}")
-
-    frame, error = load_prediction_data()
-    if error:
-        _empty_state(error)
+        universe = etfs
+    estimates = _cached_average_estimates(tuple(universe.items()))
+    if estimates.empty:
+        st.warning("目前沒有足夠14個交易日的行情資料可供估算，請先更新資料。")
         return
 
-    if "stock_id" in frame.columns:
-        normalized = frame["stock_id"].astype(str).str.upper().str.replace(".TW", "", regex=False)
-        frame = frame[normalized == selected_symbol.removesuffix(".TW")].copy()
-        if frame.empty:
-            _empty_state(f"{selected_label} 尚未產生已驗證的模型預測")
-            return
-
-    latest = frame.iloc[-1]
-    st.caption(f"資料截至：{latest['trade_date']:%Y/%m/%d}｜共 {len(frame):,} 筆預測紀錄")
-    cols = st.columns(6)
-    metric_specs = (
-        ("1日上漲機率", "probability_up_1d"), ("5日上漲機率", "probability_up_5d"),
-        ("20日上漲機率", "probability_up_20d"), ("1日預期報酬", "predicted_return_1d"),
-        ("5日預期報酬", "predicted_return_5d"), ("20日預期報酬", "predicted_return_20d"),
+    labels = {
+        f"{row['name']}（{row['symbol']}）": row["symbol"]
+        for _, row in estimates.iterrows()
+    }
+    selected_label = st.selectbox(
+        "選擇個股或ETF查看估算",
+        list(labels),
+        accept_new_options=False,
+        filter_mode=None,
     )
-    for column, (label, field) in zip(cols, metric_specs):
+    selected_symbol = labels[selected_label]
+    selected = estimates[estimates["symbol"] == selected_symbol].iloc[0]
+    st.caption(f"資料截至：{selected['data_date']:%Y/%m/%d}｜目前類別可估算 {len(estimates)} 檔")
+    columns = st.columns(4)
+    specs = (
+        ("最新收盤價", "latest_close"),
+        ("3日平均價", "average_3d"),
+        ("7日平均價", "average_7d"),
+        ("14日平均價", "average_14d"),
+    )
+    for column, (label, field) in zip(columns, specs):
         with column:
-            _metric(label, latest, field)
-
-    signal = str(latest.get("signal", "尚無訊號"))
-    risk = str(latest.get("risk_level", "尚無風險評級"))
-    confidence = str(latest.get("confidence_level", "尚無信心水準"))
-    signal_color = COLORS["signal"]["neutral"]
-    st.markdown(
-        f"<div style='border-left:6px solid {signal_color};padding:.8rem 1rem;background:rgba(128,128,128,.08)'>"
-        f"<b>模型訊號：</b>{signal}　｜　<b>信心水準：</b>{confidence}　｜　<b>風險等級：</b>{risk}</div>",
-        unsafe_allow_html=True,
+            st.metric(label, f"{selected[field]:,.2f}")
+    st.markdown("#### 三種平均期間的±80%估算")
+    detail = pd.DataFrame([
+        {
+            "平均期間": f"{window}個交易日",
+            "平均價": selected[f"average_{window}d"],
+            "下界（平均價−80%）": selected[f"lower_{window}d"],
+            "上界（平均價＋80%）": selected[f"upper_{window}d"],
+        }
+        for window in (3, 7, 14)
+    ])
+    st.dataframe(
+        detail.style.format({column: "{:,.2f}" for column in detail.columns[1:]}),
+        hide_index=True,
+        width="stretch",
+    )
+    st.info(
+        f"三個平均值綜合估算：中心價 {selected['estimated_price']:,.2f}，"
+        f"區間 {selected['estimated_lower']:,.2f}～{selected['estimated_upper']:,.2f}。"
     )
 
-    if CHART_COLUMNS.issubset(frame.columns):
-        render_chart_with_legend(prediction_chart(frame), prediction_legend_items(), "prediction")
-        render_glossary(("ACTUAL_PRICE", "PREDICTED_PRICE", "PREDICTION_INTERVAL"))
-    else:
-        missing = "、".join(sorted(CHART_COLUMNS - set(frame.columns)))
-        st.info(f"機率資料已載入，但價格預測圖尚缺少欄位：{missing}")
-
-    with st.expander("查看最新預測原始資料"):
-        st.dataframe(frame.tail(50), width="stretch", hide_index=True)
-
-    st.info("模型輸出僅供研究，請搭配技術面、籌碼面、風險承受度及資金管理判斷。")
+    with st.expander(f"查看{category}全部估算", expanded=False):
+        display = estimates[[
+            "symbol", "name", "data_date", "latest_close", "average_3d", "average_7d", "average_14d",
+            "estimated_price", "estimated_lower", "estimated_upper",
+        ]].rename(columns={
+            "symbol": "代號", "name": "名稱", "data_date": "資料日期", "latest_close": "最新收盤價",
+            "average_3d": "3日平均", "average_7d": "7日平均", "average_14d": "14日平均",
+            "estimated_price": "綜合中心價", "estimated_lower": "估算下界", "estimated_upper": "估算上界",
+        })
+        st.dataframe(display, hide_index=True, width="stretch")
+    st.warning(
+        "±80%是使用者指定的極寬統計範圍，不代表價格有80%機率落在區間內。"
+        "此功能不是已驗證的機器學習預測，也不構成買賣建議。"
+    )
+    with st.expander("Logistic Regression與XGBoost開發狀態"):
+        st.info("⏳ 正在訓練與進行時間序列驗證；完成未來資料防護與回測後才會顯示上漲機率。")
