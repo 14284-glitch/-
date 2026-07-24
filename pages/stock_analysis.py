@@ -64,15 +64,25 @@ def render() -> None:
         st.info("所選日期範圍沒有交易資料。")
         return
     stock_name = universe[symbol]
-    render_chart_with_legend(price_chart(frame, stock_name), price_legend_items(), f"{symbol}_price")
+    render_chart_with_legend(
+        price_chart(frame, stock_name), price_legend_items(), f"{symbol}_price", default_period="7天"
+    )
     render_glossary(("KLINE", "MA5", "MA10", "MA20", "MA60", "MA120", "MA240", "BOLLINGER"))
-    render_chart_with_legend(volume_chart(frame), volume_legend_items(), f"{symbol}_volume")
+    render_chart_with_legend(
+        volume_chart(frame), volume_legend_items(), f"{symbol}_volume", default_period="7天"
+    )
     render_glossary(("VOLUME", "VOLUME_MA20"))
-    render_chart_with_legend(kd_chart(frame), kd_legend_items(), f"{symbol}_kd")
+    render_chart_with_legend(
+        kd_chart(frame), kd_legend_items(), f"{symbol}_kd", default_period="7天"
+    )
     render_glossary(("KD", "K", "D"))
-    render_chart_with_legend(rsi_chart(frame), rsi_legend_items(), f"{symbol}_rsi")
+    render_chart_with_legend(
+        rsi_chart(frame), rsi_legend_items(), f"{symbol}_rsi", default_period="7天"
+    )
     render_glossary(("RSI",))
-    render_chart_with_legend(macd_chart(frame), macd_legend_items(), f"{symbol}_macd")
+    render_chart_with_legend(
+        macd_chart(frame), macd_legend_items(), f"{symbol}_macd", default_period="7天"
+    )
     render_glossary(("MACD", "DIF", "SIGNAL"))
 
 

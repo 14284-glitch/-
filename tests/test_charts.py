@@ -152,6 +152,10 @@ class ChartDesignTests(unittest.TestCase):
         self.assertIn('default_period="3個月"', market_source)
         self.assertIn('dynamic_title_prefix="主要市場相對走勢"', market_source)
 
+    def test_all_stock_analysis_charts_default_to_seven_days(self) -> None:
+        stock_source = (Path(__file__).parents[1] / "pages" / "stock_analysis.py").read_text(encoding="utf-8")
+        self.assertEqual(stock_source.count('default_period="7天"'), 5)
+
     def test_plotly_config_removes_all_in_chart_zoom_controls(self) -> None:
         from config.color_config import PLOTLY_CONFIG
 
