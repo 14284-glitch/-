@@ -10,7 +10,11 @@ import streamlit as st
 from config.color_config import COLORS
 from config.settings import PROJECT_ROOT, get_settings
 from pages import backtest_dashboard, financial_news, market_overview, prediction_dashboard, stock_analysis
-from scripts.update_daily_data import UpdateAlreadyRunning, read_last_status, run_update
+from scripts.update_daily_data import (
+    UpdateAlreadyRunning,
+    read_last_status,
+    start_background_update,
+)
 
 
 def render_system_status() -> None:
@@ -18,24 +22,39 @@ def render_system_status() -> None:
     st.info("系統每天於台北時間 07:00、14:00、21:00 自動更新，也可隨時手動更新。")
     if st.button("🔄 立即更新所有資料", type="primary", width="stretch"):
         try:
-            with st.spinner("正在更新資料，請勿重複按下按鈕……"):
-                result = run_update(trigger="manual")
-            st.success("更新完成。") if result.status == "success" else st.error("部分更新失敗，請查看下方紀錄。")
+            start_background_update(trigger="manual")
+            st.session_state["manual_update_started"] = True
         except UpdateAlreadyRunning as exc:
             st.warning(str(exc))
+        st.rerun()
+    if st.session_state.pop("manual_update_started", False):
+        st.success("手動更新已在背景啟動。可繼續瀏覽頁面，稍後按下方按鈕查看結果。")
+    if st.button("查看最新更新進度", width="stretch"):
         st.rerun()
     status = read_last_status()
     if not status:
         st.warning("尚無更新紀錄。")
         return
-    finished_at = datetime.fromisoformat(str(status["finished_at"]))
-    started_at = datetime.fromisoformat(str(status["started_at"]))
+    try:
+        finished_at = datetime.fromisoformat(str(status["finished_at"]))
+        started_at = datetime.fromisoformat(str(status["started_at"]))
+    except (KeyError, TypeError, ValueError):
+        st.warning("更新紀錄格式異常，請重新執行手動更新。")
+        return
     elapsed_seconds = max(0, int((finished_at - started_at).total_seconds()))
-    status_label = "正常" if status["status"] == "success" else "需要檢查"
+    status_label = {
+        "success": "正常",
+        "warning": "完成，部分沿用快取",
+        "failed": "需要檢查",
+    }.get(str(status["status"]), "需要檢查")
     status_color = (
         COLORS["signal"]["strong_buy"]
         if status["status"] == "success"
-        else COLORS["signal"]["high_risk"]
+        else (
+            COLORS["signal"]["bullish"]
+            if status["status"] == "warning"
+            else COLORS["signal"]["high_risk"]
+        )
     )
     status_columns = st.columns(4)
     status_columns[0].metric("系統狀態", status_label)
@@ -79,7 +98,8 @@ def render_system_status() -> None:
                 f"最後完成：{finished_at:%Y/%m/%d %H:%M:%S}（台北時間）"
                 f"</div>", unsafe_allow_html=True)
     for step in status.get("steps", []):
-        st.write(f"{'✅' if step['status'] == 'success' else '❌'} {step['name']}：{step['message']}")
+        icon = {"success": "✅", "warning": "⚠️", "failed": "❌"}.get(step["status"], "ℹ️")
+        st.write(f"{icon} {step['name']}：{step['message']}")
 
 
 def main() -> None:
@@ -168,7 +188,7 @@ def main() -> None:
     st.sidebar.divider()
     st.sidebar.caption(f"目前台北時間：{datetime.now(ZoneInfo('Asia/Taipei')):%Y-%m-%d %H:%M:%S}")
     st.sidebar.caption("本系統僅供研究，不構成投資建議。")
-    st.sidebar.caption("介面版本：2026.07.24-38（法人籌碼最近資料版）")
+    st.sidebar.caption("介面版本：2026.07.24-40（手動更新修正版）")
 
 
 if __name__ == "__main__":

@@ -28,6 +28,7 @@ def collect_latest_fundamentals(
     stock_ids: list[str],
     session: requests.Session | None = None,
     today: date | None = None,
+    include_statements: bool = True,
 ) -> dict[str, object]:
     """Append the latest safely available snapshot for every requested symbol."""
     if not token:
@@ -40,7 +41,9 @@ def collect_latest_fundamentals(
     snapshots: list[dict[str, object]] = []
     for stock_id in stock_ids:
         try:
-            snapshot = _collect_symbol(client, token, stock_id, run_day)
+            snapshot = _collect_symbol(
+                client, token, stock_id, run_day, include_statements
+            )
             if snapshot is None:
                 failed[stock_id] = "沒有可用的基本面或估值資料"
             else:
@@ -50,6 +53,7 @@ def collect_latest_fundamentals(
             failed[stock_id] = str(exc)
     if snapshots:
         frame = pd.DataFrame(snapshots).reindex(columns=OUTPUT_COLUMNS)
+        frame = _carry_forward_known_statements(frame, output_path)
         _merge_csv(frame, output_path, ["stock_id", "effective_trade_date"])
     if not completed:
         raise RuntimeError(f"FinMind fundamental collection failed: {failed}")
@@ -64,7 +68,11 @@ def collect_latest_fundamentals(
 
 
 def _collect_symbol(
-    client: requests.Session, token: str, stock_id: str, run_day: date
+    client: requests.Session,
+    token: str,
+    stock_id: str,
+    run_day: date,
+    include_statements: bool = True,
 ) -> dict[str, object] | None:
     recent = (run_day - timedelta(days=550)).isoformat()
     end = run_day.isoformat()
@@ -73,14 +81,23 @@ def _collect_symbol(
         client, token, "TaiwanStockPER", stock_id,
         (run_day - timedelta(days=45)).isoformat(), end,
     )
-    statements = _optional_request(
-        client, token, "TaiwanStockFinancialStatements", stock_id, recent, end
+    statements = (
+        _optional_request(
+            client, token, "TaiwanStockFinancialStatements", stock_id, recent, end
+        )
+        if include_statements else pd.DataFrame()
     )
-    balance = _optional_request(
-        client, token, "TaiwanStockBalanceSheet", stock_id, recent, end
+    balance = (
+        _optional_request(
+            client, token, "TaiwanStockBalanceSheet", stock_id, recent, end
+        )
+        if include_statements else pd.DataFrame()
     )
-    cashflow = _optional_request(
-        client, token, "TaiwanStockCashFlowsStatement", stock_id, recent, end
+    cashflow = (
+        _optional_request(
+            client, token, "TaiwanStockCashFlowsStatement", stock_id, recent, end
+        )
+        if include_statements else pd.DataFrame()
     )
     if revenue.empty and valuation.empty and statements.empty:
         return None
@@ -112,6 +129,33 @@ def _collect_symbol(
     available_at = max(availability)
     result["announcement_datetime"] = available_at.isoformat()
     result["effective_trade_date"] = _next_tw_session(available_at)
+    return result
+
+
+def _carry_forward_known_statements(
+    current: pd.DataFrame, output_path: Path
+) -> pd.DataFrame:
+    """Keep the most recently known quarterly values during fast daily updates."""
+    if not output_path.exists():
+        return current
+    try:
+        history = pd.read_csv(output_path)
+    except (OSError, pd.errors.ParserError, UnicodeDecodeError):
+        return current
+    if history.empty or "stock_id" not in history:
+        return current
+    history = history.drop_duplicates("stock_id", keep="last").set_index("stock_id")
+    statement_columns = (
+        "gross_margin", "operating_margin", "eps", "roe",
+        "debt_ratio", "free_cash_flow",
+    )
+    result = current.copy()
+    for column in statement_columns:
+        if column not in result:
+            result[column] = np.nan
+        if column in history:
+            prior = result["stock_id"].map(history[column])
+            result[column] = result[column].fillna(prior)
     return result
 
 
