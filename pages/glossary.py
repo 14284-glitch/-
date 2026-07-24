@@ -35,7 +35,13 @@ class LegendItem:
     focus: str = ""
 
 
-def render_chart_with_legend(figure: go.Figure, items: tuple[LegendItem, ...], date_key: str) -> None:
+def render_chart_with_legend(
+    figure: go.Figure,
+    items: tuple[LegendItem, ...],
+    date_key: str,
+    default_period: str = "1天",
+    dynamic_title_prefix: str | None = None,
+) -> None:
     """Render a chart with an accessible hover/focus explanation legend on its right."""
     figure.update_layout(showlegend=False)
     all_dates = []
@@ -49,7 +55,7 @@ def render_chart_with_legend(figure: go.Figure, items: tuple[LegendItem, ...], d
     selected_period = control_left.selectbox(
         "日期篩選",
         list(DATE_RANGE_OPTIONS),
-        index=0,
+        index=list(DATE_RANGE_OPTIONS).index(default_period),
         key=filter_key,
         accept_new_options=False,
         filter_mode=None,
@@ -68,6 +74,8 @@ def render_chart_with_legend(figure: go.Figure, items: tuple[LegendItem, ...], d
         figure.update_xaxes(autorange=True, fixedrange=True)
     else:
         figure.update_xaxes(range=[visible_start, visible_end], autorange=False, fixedrange=True)
+    if dynamic_title_prefix:
+        figure.update_layout(title=dict(text=f"{dynamic_title_prefix}｜{selected_period}", x=0.01))
     if not valid_dates.empty:
         period_text = "全部日期" if visible_start is None else f"{visible_start:%Y/%m/%d} 至 {visible_end:%Y/%m/%d}"
         st.caption(f"目前顯示：{period_text}｜將滑鼠移到曲線可查看當日資料。")

@@ -21,6 +21,15 @@ NEGATIVE_TERMS = (
     "虧損", "賣超", "裁員", "違約", "升溫", "疲弱", "不確定",
 )
 HORIZONS = (("短程", 5), ("中程", 20), ("遠程", 60))
+INDUSTRIES = {
+    "AI與半導體": ("AI", "人工智慧", "半導體", "晶片", "晶圓", "伺服器"),
+    "金融與利率": ("金融", "銀行", "保險", "利率", "降息", "升息", "債券"),
+    "能源與原物料": ("能源", "原油", "油價", "天然氣", "黃金", "原物料"),
+    "電子與科技": ("電子", "科技", "雲端", "軟體", "手機", "電腦"),
+    "航運與供應鏈": ("航運", "運價", "供應鏈", "紅海", "物流"),
+    "消費與零售": ("消費", "零售", "觀光", "餐飲", "汽車"),
+    "生技醫療": ("生技", "醫療", "製藥", "藥品"),
+}
 
 
 @dataclass(frozen=True)
@@ -65,7 +74,8 @@ def analyze_market_and_news(raw_root: Path, news_payload: dict[str, object]) -> 
         narrative = (
             f"{direction}。主要市場平均報酬約 {market_return:+.2f}%；{leaders}。"
             f"新聞語氣正向 {positive_count} 項、風險 {negative_count} 項，"
-            f"{'VIX變化已納入風險扣分。' if pd.notna(vix_change) else 'VIX資料不足，未納入風險調整。'}"
+            f"{'VIX變化已納入風險扣分。' if pd.notna(vix_change) else 'VIX資料不足，未納入風險調整。'} "
+            f"白話解讀：{_plain_language(direction, name)}"
         )
         trends.append(TrendResult(name, days, direction, round(score, 1), narrative))
 
@@ -77,6 +87,8 @@ def analyze_market_and_news(raw_root: Path, news_payload: dict[str, object]) -> 
         "trends": trends,
         "taiwan": taiwan,
         "global": global_text,
+        "taiwan_industries": _industry_trends(items, ("台股市場", "產業科技", "投資理財"), "台灣"),
+        "global_industries": _industry_trends(items, ("美股國際", "產業科技"), "全球"),
         "plan": _planning_text(trends, negative_count, positive_count),
         "market_as_of": market_as_of,
         "news_as_of": str(news_payload.get("updated_at", "未提供")),
@@ -128,6 +140,14 @@ def _direction(score: float) -> str:
     return "中性震盪"
 
 
+def _plain_language(direction: str, horizon: str) -> str:
+    if "偏多" in direction:
+        return f"{horizon}走勢有向上力量，但不是一路上漲；若成交量跟不上或風險消息增加，仍可能拉回。"
+    if "偏空" in direction:
+        return f"{horizon}壓力較大，市場容易因壞消息放大波動；先重視風險與資金配置，不急著追價。"
+    return f"{horizon}多空力量接近，較可能反覆震盪；等待價格、成交量與消息方向更一致再判斷。"
+
+
 def _leaders_text(returns: dict[str, float]) -> str:
     valid = {name: value for name, value in returns.items() if pd.notna(value)}
     if not valid:
@@ -154,8 +174,38 @@ def _regional_text(
     return (
         f"{region}新聞共 {len(regional_items)} 則，文字語氣為{direction}"
         f"（正向詞 {positive}、風險詞 {negative}）。{_leaders_text(returns)}。"
-        "觀察時應同時確認成交量、利率、匯率與政策變化，避免只依新聞標題判斷。"
+        f"白話來說，目前{region}市場的好消息與風險正在拉鋸，"
+        "觀察時要同時確認成交量、利率、匯率與政策變化，不要只看單一新聞標題。"
     )
+
+
+def _industry_trends(
+    items: list[dict[str, object]], categories: tuple[str, ...], region: str
+) -> list[str]:
+    regional_items = [item for item in items if item.get("category") in categories]
+    ranked: list[tuple[int, str, int, int]] = []
+    for industry, keywords in INDUSTRIES.items():
+        matched = [
+            item for item in regional_items
+            if any(keyword in f"{item.get('title', '')} {item.get('summary', '')}" for keyword in keywords)
+        ]
+        if not matched:
+            continue
+        _, positive, negative = _news_tone(matched)
+        ranked.append((len(matched), industry, positive, negative))
+    ranked.sort(reverse=True)
+    if not ranked:
+        return [f"{region}產業新聞樣本不足，目前無法形成可靠的產業排序。"]
+    results = []
+    for count, industry, positive, negative in ranked[:4]:
+        if positive > negative:
+            tone = "消息面較正向，但仍需確認實際營收與訂單"
+        elif negative > positive:
+            tone = "風險消息較多，宜留意成本、需求或政策壓力"
+        else:
+            tone = "好壞消息接近，產業方向仍在整理"
+        results.append(f"{industry}：相關新聞 {count} 則，{tone}。")
+    return results
 
 
 def _planning_text(trends: list[TrendResult], negative: int, positive: int) -> list[str]:

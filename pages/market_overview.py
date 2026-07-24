@@ -48,6 +48,8 @@ def render() -> None:
         apply_chart_layout(figure, "主要市場近一年相對走勢（起點＝100）", "指數化價格", True),
         market_legend_items(),
         "market_overview",
+        default_period="3個月",
+        dynamic_title_prefix="主要市場相對走勢",
     )
     render_glossary(("SP500", "NASDAQ100", "SOX"))
     _render_ai_trend_summary()
@@ -72,9 +74,15 @@ def _render_ai_trend_summary() -> None:
     with taiwan_column:
         st.markdown("#### 目前台灣財經文字趨勢")
         st.write(analysis["taiwan"])
+        st.markdown("##### 台灣產業趨勢")
+        for item in analysis["taiwan_industries"]:
+            st.markdown(f"- {item}")
     with global_column:
         st.markdown("#### 目前全球財經文字趨勢")
         st.write(analysis["global"])
+        st.markdown("##### 全球產業趨勢")
+        for item in analysis["global_industries"]:
+            st.markdown(f"- {item}")
     st.markdown("#### 未來方向與研究規劃")
     for item in analysis["plan"]:
         st.markdown(f"- {item}")

@@ -145,6 +145,12 @@ class ChartDesignTests(unittest.TestCase):
         self.assertIn('"↺ 回復原始圖形曲線"', glossary_source)
         self.assertIn("accept_new_options=False", glossary_source)
         self.assertIn("filter_mode=None", glossary_source)
+        self.assertIn('title=dict(text=f"{dynamic_title_prefix}｜{selected_period}"', glossary_source)
+
+    def test_market_overview_defaults_to_three_months(self) -> None:
+        market_source = (Path(__file__).parents[1] / "pages" / "market_overview.py").read_text(encoding="utf-8")
+        self.assertIn('default_period="3個月"', market_source)
+        self.assertIn('dynamic_title_prefix="主要市場相對走勢"', market_source)
 
     def test_plotly_config_removes_all_in_chart_zoom_controls(self) -> None:
         from config.color_config import PLOTLY_CONFIG
