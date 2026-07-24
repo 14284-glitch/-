@@ -1,12 +1,11 @@
 from datetime import timedelta
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
-import numpy as np
 
-from models.price_average_estimator import estimate_symbol_price, estimate_universe
-from models.research_forecaster import forecast_from_price_history
+from models.research_forecaster import attach_external_market_features, forecast_from_price_history
 from pages.prediction_dashboard import load_prediction_data
 from config.universe import TAIWAN_50_CONSTITUENTS, load_popular_etfs
 
@@ -28,46 +27,6 @@ def test_invalid_prediction_date_is_rejected(tmp_path: Path):
 def test_prediction_universes_have_fifty_items():
     assert len(TAIWAN_50_CONSTITUENTS) == 50
     assert len(load_popular_etfs()) == 50
-
-
-def test_average_estimator_calculates_3_7_14_day_ranges(tmp_path: Path):
-    path = tmp_path / "2330_TW.csv"
-    dates = pd.date_range("2026-07-01", periods=20)
-    closes = list(range(100, 120))
-    pd.DataFrame({"trade_date": dates, "close": closes}).to_csv(path, index=False)
-
-    result = estimate_symbol_price(path, "2330.TW", "台積電", as_of="2026-07-20")
-
-    assert result["average_3d"] == sum([117, 118, 119]) / 3
-    assert result["average_7d"] == sum(range(113, 120)) / 7
-    assert result["average_14d"] == sum(range(106, 120)) / 14
-    assert result["lower_3d"] == pytest.approx(result["average_3d"] * 0.2)
-    assert result["upper_3d"] == pytest.approx(result["average_3d"] * 1.8)
-
-
-def test_estimator_excludes_rows_after_as_of_date(tmp_path: Path):
-    path = tmp_path / "2330_TW.csv"
-    dates = pd.date_range("2026-07-01", periods=16)
-    closes = [100.0] * 15 + [99999.0]
-    pd.DataFrame({"trade_date": dates, "close": closes}).to_csv(path, index=False)
-
-    result = estimate_symbol_price(path, "2330.TW", "台積電", as_of="2026-07-15")
-
-    assert result["latest_close"] == 100.0
-    assert result["average_14d"] == 100.0
-
-
-def test_universe_estimator_handles_missing_symbols(tmp_path: Path):
-    pd.DataFrame({
-        "trade_date": pd.date_range("2026-07-01", periods=14),
-        "close": range(100, 114),
-    }).to_csv(tmp_path / "2330_TW.csv", index=False)
-    result = estimate_universe(
-        {"2330.TW": "台積電", "9999.TW": "缺少資料"},
-        tmp_path,
-        as_of="2026-07-20",
-    )
-    assert list(result["symbol"]) == ["2330"]
 
 
 def _write_forecast_history(path: Path, rows: int = 520) -> None:
@@ -116,3 +75,23 @@ def test_research_forecaster_does_not_use_rows_after_cutoff(tmp_path: Path):
     for left, right in zip(original["forecasts"], extended["forecasts"]):
         assert left.expected_return == pytest.approx(right.expected_return)
         assert left.probability_up == pytest.approx(right.probability_up)
+
+
+def test_us_market_features_use_strictly_previous_us_session(tmp_path: Path):
+    raw = tmp_path / "raw"
+    (raw / "us").mkdir(parents=True)
+    tw = pd.DataFrame({
+        "trade_date": pd.to_datetime(["2026-07-15", "2026-07-16"]),
+        "close": [100.0, 101.0],
+    })
+    pd.DataFrame({
+        "us_trade_date": ["2026-07-13", "2026-07-14", "2026-07-15"],
+        "close": [100.0, 110.0, 220.0],
+    }).to_csv(raw / "us" / "INDEX_GSPC.csv", index=False)
+
+    joined = attach_external_market_features(tw, raw)
+
+    # Taiwan 7/15 receives US 7/14 return (+10%), never the same-date US 7/15 close.
+    assert joined.loc[0, "sp500_prev_return"] == pytest.approx(0.10)
+    # Taiwan 7/16 can then receive the completed US 7/15 return (+100%).
+    assert joined.loc[1, "sp500_prev_return"] == pytest.approx(1.00)

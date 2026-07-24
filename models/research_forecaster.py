@@ -9,22 +9,36 @@ import numpy as np
 import pandas as pd
 
 from features.technical_indicators import add_technical_indicators
+from features.point_in_time_integrator import attach_point_in_time_features
 
 
 HORIZON_CONFIG = {
     1: {"lookback": 20, "flat_threshold": 0.003, "features": ("return_1d", "return_5d", "log_return",
                                                               "volume_change", "volatility_20",
                                                               "close_to_ma20", "rsi14", "macd_histogram",
-                                                              "gap_return", "amplitude")},
+                                                              "gap_return", "amplitude", "twii_return_1d",
+                                                              "sp500_prev_return", "sox_prev_return",
+                                                              "vix_prev_change", "foreign_net_5d",
+                                                              "news_sentiment_5d")},
     5: {"lookback": 60, "flat_threshold": 0.010, "features": ("return_5d", "return_20d", "volume_ratio_20",
                                                                "volatility_20", "volatility_60",
                                                                "close_to_ma20", "close_to_ma60", "rsi14",
-                                                               "macd_histogram", "bollinger_position")},
+                                                               "macd_histogram", "bollinger_position",
+                                                               "twii_return_5d", "nasdaq_prev_return",
+                                                               "tsm_prev_return", "twd_prev_change",
+                                                               "institutional_net_5d", "margin_change_5d",
+                                                               "revenue_yoy", "news_count_5d")},
     20: {"lookback": 250, "flat_threshold": 0.030, "features": ("return_20d", "return_60d", "volume_ratio_20",
                                                                  "volatility_60", "volatility_120",
                                                                  "close_to_ma60", "close_to_ma120",
                                                                  "distance_52w_high", "rsi14",
-                                                                 "bollinger_position")},
+                                                                 "bollinger_position", "twii_return_20d",
+                                                                 "sp500_prev_return_20d",
+                                                                 "sox_prev_return_20d",
+                                                                 "tnx_prev_change_20d", "short_change_5d",
+                                                                 "gross_margin", "eps", "roe",
+                                                                 "debt_ratio", "free_cash_flow",
+                                                                 "event_risk_20d")},
 }
 
 
@@ -54,7 +68,7 @@ def forecast_from_price_history(
     transaction_cost: float = 0.00585,
     as_of: str | pd.Timestamp | None = None,
 ) -> dict[str, object]:
-    frame = _prepare_features(path, as_of)
+    frame, stage_availability = _prepare_features(path, as_of)
     if len(frame) < 280:
         raise ValueError("有效歷史資料不足280個交易日，無法建立20日研究預測")
     latest = frame.iloc[-1]
@@ -70,11 +84,14 @@ def forecast_from_price_history(
         "resistance_20": float(latest["resistance_20"]),
         "history_years": history_years,
         "formal_training_ready": history_years >= 5,
+        "stage_availability": stage_availability,
         "forecasts": forecasts,
     }
 
 
-def _prepare_features(path: Path, as_of: str | pd.Timestamp | None) -> pd.DataFrame:
+def _prepare_features(
+    path: Path, as_of: str | pd.Timestamp | None
+) -> tuple[pd.DataFrame, dict[str, bool]]:
     if not path.exists():
         raise ValueError("找不到行情資料")
     frame = pd.read_csv(path)
@@ -109,6 +126,11 @@ def _prepare_features(path: Path, as_of: str | pd.Timestamp | None) -> pd.DataFr
     frame["distance_52w_high"] = close / high_52w - 1
     frame["support_20"] = frame["low"].rolling(20).min()
     frame["resistance_20"] = frame["high"].rolling(20).max()
+    frame = attach_external_market_features(frame, path.parents[1])
+    stock_id = path.stem.replace("_TW", ".TW")
+    frame, stage_availability = attach_point_in_time_features(
+        frame, stock_id, path.parents[1].parent / "processed"
+    )
     for horizon in (1, 5, 20):
         frame[f"future_return_{horizon}d"] = close.shift(-horizon) / close - 1
         frame[f"future_high_{horizon}d"] = (
@@ -117,7 +139,70 @@ def _prepare_features(path: Path, as_of: str | pd.Timestamp | None) -> pd.DataFr
         frame[f"future_low_{horizon}d"] = (
             frame["low"].shift(-1).rolling(horizon).min().shift(-(horizon - 1))
         )
-    return frame.replace([np.inf, -np.inf], np.nan)
+    return frame.replace([np.inf, -np.inf], np.nan), stage_availability
+
+
+def attach_external_market_features(frame: pd.DataFrame, raw_root: Path) -> pd.DataFrame:
+    """Attach TW close data and strictly previous-session US data point in time."""
+    result = frame.sort_values("trade_date").copy()
+    twii = _read_external_series(raw_root / "tw" / "INDEX_TWII.csv", "trade_date")
+    if not twii.empty:
+        twii["twii_return_1d"] = twii["close"].pct_change()
+        twii["twii_return_5d"] = twii["close"].pct_change(5)
+        twii["twii_return_20d"] = twii["close"].pct_change(20)
+        result = result.merge(
+            twii[["date", "twii_return_1d", "twii_return_5d", "twii_return_20d"]],
+            left_on="trade_date", right_on="date", how="left",
+        ).drop(columns="date")
+    else:
+        for column in ("twii_return_1d", "twii_return_5d", "twii_return_20d"):
+            result[column] = 0.0
+
+    external = {
+        "sp500": raw_root / "us" / "INDEX_GSPC.csv",
+        "nasdaq": raw_root / "us" / "INDEX_NDX.csv",
+        "sox": raw_root / "us" / "INDEX_SOX.csv",
+        "vix": raw_root / "us" / "INDEX_VIX.csv",
+        "tsm": raw_root / "us" / "TSM.csv",
+        "twd": raw_root / "us" / "TWD_X.csv",
+        "tnx": raw_root / "us" / "INDEX_TNX.csv",
+    }
+    for prefix, series_path in external.items():
+        series = _read_external_series(series_path, "us_trade_date")
+        one_day = f"{prefix}_prev_{'change' if prefix in {'vix', 'twd', 'tnx'} else 'return'}"
+        twenty_day = f"{one_day}_20d"
+        if series.empty:
+            result[one_day] = 0.0
+            result[twenty_day] = 0.0
+            continue
+        series[one_day] = series["close"].pct_change()
+        series[twenty_day] = series["close"].pct_change(20)
+        result = pd.merge_asof(
+            result.sort_values("trade_date"),
+            series[["date", one_day, twenty_day]].sort_values("date"),
+            left_on="trade_date",
+            right_on="date",
+            direction="backward",
+            allow_exact_matches=False,
+        ).drop(columns="date")
+    market_columns = [
+        column for column in result.columns
+        if column.startswith(("twii_", "sp500_", "nasdaq_", "sox_", "vix_", "tsm_", "twd_", "tnx_"))
+    ]
+    result[market_columns] = result[market_columns].fillna(0.0)
+    return result
+
+
+def _read_external_series(path: Path, date_column: str) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame(columns=["date", "close"])
+    try:
+        data = pd.read_csv(path, usecols=[date_column, "close"])
+    except (OSError, ValueError, pd.errors.ParserError):
+        return pd.DataFrame(columns=["date", "close"])
+    data["date"] = pd.to_datetime(data[date_column], errors="coerce").dt.tz_localize(None)
+    data["close"] = pd.to_numeric(data["close"], errors="coerce")
+    return data.dropna().sort_values("date").drop_duplicates("date", keep="last")[["date", "close"]]
 
 
 def _forecast_horizon(
