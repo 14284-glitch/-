@@ -1,20 +1,12 @@
 import tempfile
 import unittest
-from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
-from zoneinfo import ZoneInfo
 
 from scripts import update_daily_data
 
 
 class UpdatePipelineTests(unittest.TestCase):
-    def test_market_open_check_uses_taiwan_exchange_calendar(self) -> None:
-        taipei = ZoneInfo("Asia/Taipei")
-        self.assertTrue(update_daily_data.is_tw_market_open(datetime(2026, 7, 20, 9, 3, tzinfo=taipei)))
-        self.assertFalse(update_daily_data.is_tw_market_open(datetime(2026, 7, 20, 14, 0, tzinfo=taipei)))
-        self.assertFalse(update_daily_data.is_tw_market_open(datetime(2026, 7, 19, 10, 0, tzinfo=taipei)))
-
     def test_successful_steps_are_reported(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

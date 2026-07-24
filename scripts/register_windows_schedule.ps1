@@ -13,12 +13,9 @@ $dailyTriggers += New-ScheduledTaskTrigger -Daily -At "21:00"
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName $dailyTaskName -Action $dailyAction -Trigger $dailyTriggers -Settings $settings -Description "Taiwan stock predictor daily data update" -Force
 
-$marketTaskName = "TaiwanStockPredictorMarketUpdate"
-$marketArguments = "-m scripts.update_daily_data --trigger market --market-open-only"
-$marketAction = New-ScheduledTaskAction -Execute $PythonPath -Argument $marketArguments -WorkingDirectory $ProjectPath
-$marketTrigger = New-ScheduledTaskTrigger -Once -At "00:00" `
-    -RepetitionInterval (New-TimeSpan -Minutes 3) `
-    -RepetitionDuration (New-TimeSpan -Days 1)
-Register-ScheduledTask -TaskName $marketTaskName -Action $marketAction -Trigger $marketTrigger -Settings $settings -Description "Taiwan market update every 3 minutes while open" -Force
+$obsoleteMarketTask = Get-ScheduledTask -TaskName "TaiwanStockPredictorMarketUpdate" -ErrorAction SilentlyContinue
+if ($obsoleteMarketTask) {
+    Unregister-ScheduledTask -TaskName "TaiwanStockPredictorMarketUpdate" -Confirm:$false
+}
 
-Write-Host "Schedules registered: every 3 minutes while market is open, plus 07:00, 14:00 and 21:00 daily."
+Write-Host "Schedule registered: 07:00, 14:00 and 21:00 daily. The obsolete 3-minute schedule was removed."

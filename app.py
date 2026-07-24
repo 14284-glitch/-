@@ -13,7 +13,7 @@ from scripts.update_daily_data import UpdateAlreadyRunning, read_last_status, ru
 
 def render_system_status() -> None:
     st.header("系統與資料更新")
-    st.info("台股開市期間每3分鐘自動更新；另於台北時間 07:00、14:00、21:00 完整更新，也可隨時手動更新。")
+    st.info("系統每天於台北時間 07:00、14:00、21:00 自動更新，也可隨時手動更新。")
     if st.button("🔄 立即更新所有資料", type="primary", width="stretch"):
         try:
             with st.spinner("正在更新資料，請勿重複按下按鈕……"):
@@ -113,7 +113,7 @@ def main() -> None:
     st.sidebar.divider()
     st.sidebar.caption(f"目前台北時間：{datetime.now(ZoneInfo('Asia/Taipei')):%Y-%m-%d %H:%M:%S}")
     st.sidebar.caption("本系統僅供研究，不構成投資建議。")
-    st.sidebar.caption("介面版本：2026.07.18-24")
+    st.sidebar.caption("介面版本：2026.07.24-25")
 
 
 if __name__ == "__main__":
