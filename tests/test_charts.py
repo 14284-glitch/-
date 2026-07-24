@@ -7,8 +7,8 @@ import pandas as pd
 from config.color_config import COLORS, LINE_STYLES
 from config.indicator_glossary import INDICATOR_GLOSSARY, bilingual
 from features.technical_indicators import add_technical_indicators
-from pages.chart_factory import RANGE_BUTTONS, kd_chart, macd_chart, prediction_chart, price_chart, rsi_chart, volume_chart
-from pages.glossary import _figure_y_bounds
+from pages.chart_factory import kd_chart, macd_chart, prediction_chart, price_chart, rsi_chart, volume_chart
+from pages.glossary import DATE_RANGE_OPTIONS, _figure_y_bounds, _selected_date_bounds
 
 
 def sample_prices(rows: int = 260) -> pd.DataFrame:
@@ -35,16 +35,17 @@ class ChartDesignTests(unittest.TestCase):
             self.assertEqual(trace.line.color, COLORS["moving_average"][key])
             self.assertGreaterEqual(trace.line.width, 2)
 
-    def test_every_chart_has_legend_hover_range_selector_and_zoomable_axes(self) -> None:
+    def test_every_chart_has_hover_and_disables_in_chart_zoom(self) -> None:
         for figure in (price_chart(self.frame, "測試"), volume_chart(self.frame), kd_chart(self.frame),
                        macd_chart(self.frame), rsi_chart(self.frame)):
             self.assertEqual(figure.layout.hovermode, "x")
             self.assertIsNotNone(figure.layout.legend)
             self.assertEqual(figure.layout.legend.orientation, "v")
             self.assertGreater(float(figure.layout.legend.x), 1.0)
-            self.assertGreater(len(figure.layout.xaxis.rangeselector.buttons), 0)
-            self.assertTrue(figure.layout.xaxis.rangeslider.visible)
-            self.assertFalse(figure.layout.yaxis.fixedrange)
+            self.assertFalse(figure.layout.xaxis.rangeslider.visible)
+            self.assertTrue(figure.layout.xaxis.fixedrange)
+            self.assertTrue(figure.layout.yaxis.fixedrange)
+            self.assertFalse(figure.layout.dragmode)
             self.assertEqual(figure.layout.xaxis.tickformat, "%Y/%m/%d")
             self.assertEqual(figure.layout.xaxis.hoverformat, "%Y/%m/%d")
             self.assertGreaterEqual(len(figure.layout.xaxis.tickformatstops), 4)
@@ -55,23 +56,12 @@ class ChartDesignTests(unittest.TestCase):
             self.assertTrue(figure.layout.xaxis.showspikes)
             self.assertGreaterEqual(figure.layout.height, 480)
 
-    def test_range_selector_has_requested_day_intervals(self) -> None:
-        day_buttons = {
-            (button["count"], button["label"], button["step"])
-            for button in RANGE_BUTTONS if button.get("step") == "day"
-        }
-        self.assertEqual(day_buttons, {
-            (1, "1天", "day"), (3, "3天", "day"),
-            (4, "4天", "day"), (5, "5天", "day"), (7, "7天", "day"),
-            (10, "10天", "day"), (15, "15天", "day"),
-        })
-
-    def test_every_chart_defaults_to_one_day(self) -> None:
-        for figure in (price_chart(self.frame, "測試"), volume_chart(self.frame), kd_chart(self.frame),
-                       macd_chart(self.frame), rsi_chart(self.frame)):
-            self.assertEqual(figure.layout.xaxis.rangeselector.buttons[0].label, "1天")
-            start, end = pd.to_datetime(list(figure.layout.xaxis.range))
-            self.assertEqual((end - start).days, 1)
+    def test_external_date_dropdown_has_requested_intervals_and_defaults_to_one_day(self) -> None:
+        self.assertEqual(list(DATE_RANGE_OPTIONS)[:7], ["1天", "3天", "4天", "5天", "7天", "10天", "15天"])
+        dates = pd.Series(pd.date_range("2026-01-01", periods=30))
+        start, end = _selected_date_bounds(dates, "1天")
+        self.assertEqual((end - start).days, 1)
+        self.assertEqual(_selected_date_bounds(dates, "全部日期"), (None, None))
 
     def test_prediction_chart_distinguishes_all_required_series(self) -> None:
         prediction = pd.DataFrame({
@@ -146,8 +136,23 @@ class ChartDesignTests(unittest.TestCase):
         self.assertGreater(protected_range[1], maximum)
 
         glossary_source = (Path(__file__).parents[1] / "pages" / "glossary.py").read_text(encoding="utf-8")
-        self.assertIn("頂點保護留白", glossary_source)
+        self.assertIn("曲線範圍縮放", glossary_source)
         self.assertIn("protected_range", glossary_source)
+
+    def test_external_controls_include_reset_and_fixed_dropdown(self) -> None:
+        glossary_source = (Path(__file__).parents[1] / "pages" / "glossary.py").read_text(encoding="utf-8")
+        self.assertIn('"日期篩選"', glossary_source)
+        self.assertIn('"↺ 回復原始圖形曲線"', glossary_source)
+        self.assertIn("accept_new_options=False", glossary_source)
+        self.assertIn("filter_mode=None", glossary_source)
+
+    def test_plotly_config_removes_all_in_chart_zoom_controls(self) -> None:
+        from config.color_config import PLOTLY_CONFIG
+
+        self.assertFalse(PLOTLY_CONFIG["scrollZoom"])
+        self.assertFalse(PLOTLY_CONFIG["doubleClick"])
+        for button in ("zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "autoScale2d", "resetScale2d"):
+            self.assertIn(button, PLOTLY_CONFIG["modeBarButtonsToRemove"])
 
 
 if __name__ == "__main__":

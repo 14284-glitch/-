@@ -10,6 +10,21 @@ import streamlit as st
 from config.color_config import COLORS, LINE_STYLES, PLOTLY_CONFIG
 from config.indicator_glossary import INDICATOR_GLOSSARY
 
+DATE_RANGE_OPTIONS = {
+    "1天": pd.DateOffset(days=1),
+    "3天": pd.DateOffset(days=3),
+    "4天": pd.DateOffset(days=4),
+    "5天": pd.DateOffset(days=5),
+    "7天": pd.DateOffset(days=7),
+    "10天": pd.DateOffset(days=10),
+    "15天": pd.DateOffset(days=15),
+    "1個月": pd.DateOffset(months=1),
+    "3個月": pd.DateOffset(months=3),
+    "6個月": pd.DateOffset(months=6),
+    "1年": pd.DateOffset(years=1),
+    "全部日期": None,
+}
+
 
 @dataclass(frozen=True)
 class LegendItem:
@@ -28,51 +43,58 @@ def render_chart_with_legend(figure: go.Figure, items: tuple[LegendItem, ...], d
         if getattr(trace, "x", None) is not None:
             all_dates.extend(list(trace.x))
     valid_dates = pd.to_datetime(pd.Series(all_dates), errors="coerce").dropna()
+    filter_key = f"chart_period_{date_key}"
+    scale_key = f"y_range_{date_key}"
+    control_left, control_right = st.columns([3, 1], gap="small")
+    selected_period = control_left.selectbox(
+        "日期篩選",
+        list(DATE_RANGE_OPTIONS),
+        index=0,
+        key=filter_key,
+        accept_new_options=False,
+        filter_mode=None,
+        help="只能從固定日期區間選取，不在圖形內縮放。",
+    )
+    control_right.button(
+        "↺ 回復原始圖形曲線",
+        key=f"reset_chart_{date_key}",
+        width="stretch",
+        on_click=_reset_chart_controls,
+        args=(filter_key, scale_key),
+        help="顯示全部日期並恢復預設曲線比例。",
+    )
+    visible_start, visible_end = _selected_date_bounds(valid_dates, selected_period)
+    if visible_start is None or visible_end is None:
+        figure.update_xaxes(autorange=True, fixedrange=True)
+    else:
+        figure.update_xaxes(range=[visible_start, visible_end], autorange=False, fixedrange=True)
     if not valid_dates.empty:
-        selected_date = st.date_input(
-            "指定資訊游標日期", value=valid_dates.max().date(),
-            min_value=valid_dates.min().date(), max_value=valid_dates.max().date(),
-            format="YYYY/MM/DD", key=f"chart_cursor_{date_key}",
-            help="選擇日期後會在圖上標出該日，並顯示當日主要數值；不會改變圖表範圍。",
-        )
-        selected_timestamp = pd.Timestamp(selected_date)
-        figure.add_shape(
-            type="line", x0=selected_timestamp, x1=selected_timestamp, y0=0, y1=1,
-            xref="x", yref="paper", line=dict(color=COLORS["layout"]["date_cursor"], width=3, dash="dot"),
-        )
-        figure.add_annotation(
-            x=selected_timestamp, y=1, xref="x", yref="paper", text=f"資訊日期 {selected_date:%Y/%m/%d}",
-            showarrow=True, arrowcolor=COLORS["layout"]["date_cursor"], bgcolor=COLORS["layout"]["tooltip_background"],
-            bordercolor=COLORS["layout"]["tooltip_border"], font=dict(color=COLORS["layout"]["tooltip_text"]),
-        )
-        selected_values = _values_for_date(figure, selected_timestamp)
-        st.info(f"指定日期：{selected_date:%Y/%m/%d}｜" + "｜".join(selected_values[:6]))
+        period_text = "全部日期" if visible_start is None else f"{visible_start:%Y/%m/%d} 至 {visible_end:%Y/%m/%d}"
+        st.caption(f"目前顯示：{period_text}｜將滑鼠移到曲線可查看當日資料。")
     # The chart receives most of the desktop width; the external legend stays readable on the right.
     chart_column, legend_column = st.columns([84, 16], gap="small", vertical_alignment="top")
-    y_minimum, y_maximum = _figure_y_bounds(figure)
+    y_minimum, y_maximum = _figure_y_bounds(figure, visible_start, visible_end)
     with legend_column:
         st.markdown("#### 顯示範圍")
         if y_minimum is not None and y_maximum is not None:
             span = y_maximum - y_minimum
-            padding_percent = st.slider(
-                "頂點保護留白",
-                min_value=2,
-                max_value=30,
-                value=6,
-                step=1,
-                key=f"y_range_{date_key}",
-                help="調整最高點與最低點外側的留白。資料頂點永遠保留，不會因放大縮小被裁切。",
-            )
+            slider_options = {
+                "min_value": 0, "max_value": 50, "step": 1, "key": scale_key,
+                "help": "向左放大曲線、向右縮小曲線。最高點與最低點永遠保留。",
+            }
+            if scale_key not in st.session_state:
+                slider_options["value"] = 6
+            padding_percent = st.slider("曲線範圍縮放", **slider_options)
             padding = max(span * padding_percent / 100, abs(y_maximum) * 0.005, 0.01)
             protected_range = [float(y_minimum - padding), float(y_maximum + padding)]
-            figure.update_yaxes(range=protected_range, autorange=False, fixedrange=False)
+            figure.update_yaxes(range=protected_range, autorange=False, fixedrange=True)
             st.caption(f"最高點 {y_maximum:,.2f}、最低點 {y_minimum:,.2f} 均受保護")
         else:
             st.caption("本圖沒有可調整的數值範圍。")
     with chart_column:
         figure.update_layout(margin=dict(l=50, r=18, t=70, b=45), autosize=True)
         st.markdown(
-            '<div class="mobile-chart-hint">圖表會依手機螢幕寬度自動縮放；下方拉桿可調整日期位置。</div>',
+            '<div class="mobile-chart-hint">請使用圖表上方日期選單與右側曲線縮放拉桿；圖形內縮放已停用。</div>',
             unsafe_allow_html=True,
         )
         st.plotly_chart(figure, width="stretch", config=PLOTLY_CONFIG)
@@ -106,7 +128,25 @@ def render_chart_with_legend(figure: go.Figure, items: tuple[LegendItem, ...], d
         )
 
 
-def _figure_y_bounds(figure: go.Figure) -> tuple[float | None, float | None]:
+def _reset_chart_controls(filter_key: str, scale_key: str) -> None:
+    st.session_state[filter_key] = "全部日期"
+    st.session_state[scale_key] = 6
+
+
+def _selected_date_bounds(
+    valid_dates: pd.Series, selected_period: str
+) -> tuple[pd.Timestamp | None, pd.Timestamp | None]:
+    if valid_dates.empty or DATE_RANGE_OPTIONS[selected_period] is None:
+        return None, None
+    end = pd.Timestamp(valid_dates.max())
+    return end - DATE_RANGE_OPTIONS[selected_period], end
+
+
+def _figure_y_bounds(
+    figure: go.Figure,
+    visible_start: pd.Timestamp | None = None,
+    visible_end: pd.Timestamp | None = None,
+) -> tuple[float | None, float | None]:
     """Return finite visible y bounds for scatter, bar and candlestick traces."""
     values: list[float] = []
     for trace in figure.data:
@@ -116,7 +156,13 @@ def _figure_y_bounds(figure: go.Figure) -> tuple[float | None, float | None]:
         for field in ("y", "high", "low"):
             series = getattr(trace, field, None)
             if series is not None:
-                candidates.extend(list(series))
+                series_values = pd.Series(list(series))
+                x_values = getattr(trace, "x", None)
+                if x_values is not None and visible_start is not None and visible_end is not None:
+                    dates = pd.to_datetime(pd.Series(list(x_values)), errors="coerce")
+                    mask = dates.between(visible_start, visible_end, inclusive="both")
+                    series_values = series_values[mask]
+                candidates.extend(series_values.tolist())
         numeric = pd.to_numeric(pd.Series(candidates), errors="coerce").dropna()
         values.extend(float(value) for value in numeric if pd.notna(value))
     if not values:

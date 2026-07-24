@@ -31,8 +31,12 @@ LINE_STYLES = {
 
 PLOTLY_CONFIG = {
     "displaylogo": False,
-    "scrollZoom": True,
+    "scrollZoom": False,
+    "doubleClick": False,
     "responsive": True,
-    "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+    "modeBarButtonsToRemove": [
+        "zoom2d", "pan2d", "zoomIn2d", "zoomOut2d",
+        "autoScale2d", "resetScale2d", "lasso2d", "select2d",
+    ],
     "toImageButtonOptions": {"format": "png", "scale": 2},
 }

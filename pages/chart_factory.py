@@ -1,28 +1,11 @@
 """Shared Plotly chart factory. No dashboard page should define series colors locally."""
 
-from datetime import timedelta
-
 import pandas as pd
 import plotly.graph_objects as go
 
 from config.color_config import COLORS, LINE_STYLES
 from config.indicator_glossary import bilingual
 
-
-RANGE_BUTTONS = [
-    dict(count=1, label="1天", step="day", stepmode="backward"),
-    dict(count=3, label="3天", step="day", stepmode="backward"),
-    dict(count=4, label="4天", step="day", stepmode="backward"),
-    dict(count=5, label="5天", step="day", stepmode="backward"),
-    dict(count=7, label="7天", step="day", stepmode="backward"),
-    dict(count=10, label="10天", step="day", stepmode="backward"),
-    dict(count=15, label="15天", step="day", stepmode="backward"),
-    dict(count=1, label="1月", step="month", stepmode="backward"),
-    dict(count=3, label="3月", step="month", stepmode="backward"),
-    dict(count=6, label="6月", step="month", stepmode="backward"),
-    dict(count=1, label="1年", step="year", stepmode="backward"),
-    dict(step="all", label="全部"),
-]
 
 DATE_TICK_FORMAT_STOPS = [
     dict(dtickrange=[None, 86_400_000], value="%m/%d"),
@@ -33,12 +16,9 @@ DATE_TICK_FORMAT_STOPS = [
 
 
 def apply_chart_layout(figure: go.Figure, title: str, y_title: str, rangeslider: bool = True) -> go.Figure:
-    latest_date = _latest_chart_date(figure)
-    default_date_range = None
-    if latest_date is not None:
-        default_date_range = [latest_date - timedelta(days=1), latest_date]
     figure.update_layout(
         title=dict(text=title, x=0.01), template="plotly_white", hovermode="x",
+        dragmode=False,
         height=520, autosize=True,
         paper_bgcolor=COLORS["layout"]["background"], plot_bgcolor=COLORS["layout"]["background"],
         hoverlabel=dict(
@@ -54,13 +34,11 @@ def apply_chart_layout(figure: go.Figure, title: str, y_title: str, rangeslider:
         margin=dict(l=55, r=190, t=70, b=45),
         xaxis=dict(
             title="日期", type="date", showgrid=True, gridcolor=COLORS["layout"]["grid"],
-            range=default_date_range,
-            rangeselector=dict(buttons=RANGE_BUTTONS),
-            rangeslider=dict(visible=rangeslider),
+            rangeslider=dict(visible=False), fixedrange=True,
             tickformat="%Y/%m/%d", tickformatstops=DATE_TICK_FORMAT_STOPS,
             hoverformat="%Y/%m/%d", ticklabelmode="period",
         ),
-        yaxis=dict(title=y_title, showgrid=True, gridcolor=COLORS["layout"]["grid"], fixedrange=False),
+        yaxis=dict(title=y_title, showgrid=True, gridcolor=COLORS["layout"]["grid"], fixedrange=True),
         hoverdistance=100,
     )
     figure.update_xaxes(
@@ -68,17 +46,6 @@ def apply_chart_layout(figure: go.Figure, title: str, y_title: str, rangeslider:
         spikecolor=COLORS["layout"]["date_cursor"], spikethickness=2,
     )
     return figure
-
-
-def _latest_chart_date(figure: go.Figure):
-    """Return the latest valid x-axis date so every chart can default to one day."""
-    dates: list[object] = []
-    for trace in figure.data:
-        x_values = getattr(trace, "x", None)
-        if x_values is not None:
-            dates.extend(list(x_values))
-    valid_dates = pd.to_datetime(pd.Series(dates), errors="coerce").dropna()
-    return None if valid_dates.empty else pd.Timestamp(valid_dates.max()).to_pydatetime()
 
 
 def add_attention_trace(figure: go.Figure, x: pd.Series, y: pd.Series, notes: pd.Series) -> None:

@@ -118,7 +118,7 @@ def main() -> None:
     st.sidebar.divider()
     st.sidebar.caption(f"目前台北時間：{datetime.now(ZoneInfo('Asia/Taipei')):%Y-%m-%d %H:%M:%S}")
     st.sidebar.caption("本系統僅供研究，不構成投資建議。")
-    st.sidebar.caption("介面版本：2026.07.24-27")
+    st.sidebar.caption("介面版本：2026.07.24-28")
 
 
 if __name__ == "__main__":
