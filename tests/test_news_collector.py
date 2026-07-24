@@ -31,12 +31,13 @@ def test_collector_uses_existing_cache_when_all_sources_fail(tmp_path: Path):
     assert result["items"][0]["title"] == "舊聞"
 
 
-def test_financial_news_is_rendered_on_home_page():
+def test_financial_news_is_default_home_and_market_overview_is_separate():
     app_source = (Path(__file__).parents[1] / "app.py").read_text(encoding="utf-8")
-    assert "def render_home()" in app_source
-    assert "financial_news.render()" in app_source
-    assert '("首頁", "個股分析", "模型預測", "策略回測", "系統狀態")' in app_source
-    assert '"財經新聞": financial_news.render' not in app_source
+    navigation = '("財經新聞", "市場總覽", "個股分析", "模型預測", "策略回測", "系統狀態")'
+    assert navigation in app_source
+    assert '"財經新聞": financial_news.render' in app_source
+    assert '"市場總覽": market_overview.render' in app_source
+    assert "def render_home()" not in app_source
 
 
 def test_home_page_reads_news_cache_before_manual_refresh():

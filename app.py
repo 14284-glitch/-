@@ -11,13 +11,6 @@ from pages import backtest_dashboard, financial_news, market_overview, predictio
 from scripts.update_daily_data import UpdateAlreadyRunning, read_last_status, run_update
 
 
-def render_home() -> None:
-    """Render market information and financial news together on the home page."""
-    market_overview.render()
-    st.divider()
-    financial_news.render()
-
-
 def render_system_status() -> None:
     st.header("系統與資料更新")
     st.info("系統每天於台北時間 07:00、14:00、21:00 自動更新，也可隨時手動更新。")
@@ -98,17 +91,19 @@ def main() -> None:
     st.sidebar.caption("請選擇要查看的功能頁面")
     page = st.sidebar.radio(
         "功能選單",
-        ("首頁", "個股分析", "模型預測", "策略回測", "系統狀態"),
-        help="切換首頁市場行情與財經新聞、個股技術分析、模型預測、策略回測或系統更新狀態。",
+        ("財經新聞", "市場總覽", "個股分析", "模型預測", "策略回測", "系統狀態"),
+        help="切換財經新聞首頁、市場行情、個股技術分析、模型預測、策略回測或系統更新狀態。",
     )
     renderers = {
-        "首頁": render_home, "個股分析": stock_analysis.render,
+        "財經新聞": financial_news.render, "市場總覽": market_overview.render,
+        "個股分析": stock_analysis.render,
         "模型預測": prediction_dashboard.render, "策略回測": backtest_dashboard.render,
         "系統狀態": render_system_status,
     }
     renderers[page]()
     sidebar_descriptions = {
-        "首頁": "查看市場總覽、主要指數走勢及最新財經新聞。",
+        "財經新聞": "瀏覽最新財經新聞，可依分類、來源或關鍵字篩選。",
+        "市場總覽": "比較台股與主要美國市場的相對走勢。",
         "個股分析": "查看K線、均線、成交量與技術指標。",
         "模型預測": "查看已驗證模型產生的預測與不確定區間。",
         "策略回測": "檢查策略的歷史績效與風險。",
@@ -118,7 +113,7 @@ def main() -> None:
     st.sidebar.divider()
     st.sidebar.caption(f"目前台北時間：{datetime.now(ZoneInfo('Asia/Taipei')):%Y-%m-%d %H:%M:%S}")
     st.sidebar.caption("本系統僅供研究，不構成投資建議。")
-    st.sidebar.caption("介面版本：2026.07.24-28")
+    st.sidebar.caption("介面版本：2026.07.24-29")
 
 
 if __name__ == "__main__":
