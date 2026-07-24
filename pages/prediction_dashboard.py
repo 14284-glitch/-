@@ -11,6 +11,7 @@ from config.color_config import COLORS
 from config.settings import PROJECT_ROOT
 from config.universe import TAIWAN_50_CONSTITUENTS, load_popular_etfs
 from models.price_average_estimator import RANGE_PERCENT, estimate_universe
+from models.research_forecaster import forecast_from_price_history
 from pages.chart_factory import prediction_chart
 from pages.glossary import prediction_legend_items, render_chart_with_legend, render_glossary
 from pages.stock_analysis import _sort_stocks_by_popularity
@@ -22,6 +23,12 @@ CHART_COLUMNS = {"trade_date", "actual_price", "predicted_price", "prediction_up
 @st.cache_data(ttl=600, show_spinner=False)
 def _cached_average_estimates(universe_items: tuple[tuple[str, str], ...]) -> pd.DataFrame:
     return estimate_universe(dict(universe_items), PROJECT_ROOT / "data" / "raw" / "tw")
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _cached_research_forecast(symbol: str) -> dict[str, object]:
+    path = PROJECT_ROOT / "data" / "raw" / "tw" / f"{symbol.replace('.', '_')}.csv"
+    return forecast_from_price_history(path)
 
 
 def load_prediction_data(path: Path = PREDICTION_PATH) -> tuple[pd.DataFrame, str | None]:
@@ -133,6 +140,7 @@ def render() -> None:
         f"三個平均值綜合估算：中心價 {selected['estimated_price']:,.2f}，"
         f"區間 {selected['estimated_lower']:,.2f}～{selected['estimated_upper']:,.2f}。"
     )
+    _render_research_forecast(selected_symbol)
 
     with st.expander(f"查看{category}全部估算", expanded=False):
         display = estimates[[
@@ -150,3 +158,59 @@ def render() -> None:
     )
     with st.expander("Logistic Regression與XGBoost開發狀態"):
         st.info("⏳ 正在訓練與進行時間序列驗證；完成未來資料防護與回測後才會顯示上漲機率。")
+
+
+def _render_research_forecast(symbol: str) -> None:
+    st.divider()
+    st.subheader("第一階段研究預測｜歷史相似情境")
+    st.caption("1日、5日、20日使用不同輸入視窗、盤整門檻與歷史情境，不共用完全相同規則。")
+    try:
+        result = _cached_research_forecast(f"{symbol}.TW")
+    except ValueError as exc:
+        st.warning(f"目前無法產生研究預測：{exc}")
+        return
+    if not result["formal_training_ready"]:
+        st.warning(
+            f"目前有效歷史約 {result['history_years']:.1f} 年，未達正式模型最低5年要求；"
+            "以下只列為研究結果，不視為已完成模型。"
+        )
+    st.caption(
+        f"資料截至：{result['data_date']:%Y/%m/%d}｜最新收盤 {result['latest_close']:,.2f}｜"
+        f"20日支撐 {result['support_20']:,.2f}｜20日壓力 {result['resistance_20']:,.2f}"
+    )
+    cards = st.columns(3)
+    for column, forecast in zip(cards, result["forecasts"]):
+        with column:
+            st.markdown(f"#### 未來{forecast.horizon}日")
+            st.write(
+                f"上漲 {forecast.probability_up:.1%}｜"
+                f"盤整 {forecast.probability_sideways:.1%}｜"
+                f"下跌 {forecast.probability_down:.1%}"
+            )
+            st.metric("預期報酬", f"{forecast.expected_return:+.2%}")
+            st.write(
+                f"報酬區間：{forecast.return_lower:+.2%}～{forecast.return_upper:+.2%}\n\n"
+                f"價格區間：{forecast.price_lower:,.2f}～{forecast.price_upper:,.2f}\n\n"
+                f"年化波動：{forecast.volatility:.1%}｜風險：{forecast.risk_level}"
+            )
+            st.write(
+                f"突破壓力機率：{forecast.probability_break_resistance:.1%}\n\n"
+                f"跌破支撐機率：{forecast.probability_break_support:.1%}"
+            )
+            cost_text = "高於" if forecast.expected_return_above_cost else "未高於"
+            st.write(f"預期報酬{cost_text}預設交易成本0.585%")
+            st.caption(f"輸入視窗：{forecast.input_window}日｜相似樣本：{forecast.analogue_count}筆")
+    with st.expander("目前六大類資料完整度與後續接入順序", expanded=False):
+        st.dataframe(pd.DataFrame([
+            {"資料類別": "價格、成交量與技術指標", "目前狀態": "已使用", "內容": "OHLC、成交量、報酬、波動、均線、RSI、KD、MACD、布林"},
+            {"資料類別": "大盤、產業與前一晚美股", "目前狀態": "部分完成", "內容": "已蒐集台股、美股、費半、VIX、ADR、匯率、美債；待正式點時對齊模型"},
+            {"資料類別": "法人、籌碼與衍生品", "目前狀態": "尚未接入模型", "內容": "三大法人、融資券、借券、期權、主力與集保"},
+            {"資料類別": "基本面與估值", "目前狀態": "尚未接入模型", "內容": "營收、財報、現金流、ROE、估值與產業供需"},
+            {"資料類別": "總體經濟", "目前狀態": "部分蒐集", "內容": "美債、匯率、VIX已蒐集；CPI、PMI、GDP等待點時資料庫"},
+            {"資料類別": "新聞、事件與情緒", "目前狀態": "已有新聞，尚未接入價格模型", "內容": "需先完成去重、來源可信度與事件時間標記"},
+            {"資料類別": "逐筆、大單小單與週轉率", "目前狀態": "資料來源不足", "內容": "目前日線來源沒有逐筆成交與完整流通股數"},
+        ]), hide_index=True, width="stretch")
+    st.info(
+        "研究模型使用當時以前的歷史列尋找相似情境，未使用未來資料；"
+        "正式上線仍需補足5年以上歷史、Walk-forward回測與交易成本驗證。"
+    )
