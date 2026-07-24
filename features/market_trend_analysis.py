@@ -30,6 +30,36 @@ INDUSTRIES = {
     "消費與零售": ("消費", "零售", "觀光", "餐飲", "汽車"),
     "生技醫療": ("生技", "醫療", "製藥", "藥品"),
 }
+INDUSTRY_EXPLANATIONS = {
+    "AI與半導體": (
+        "主要受AI伺服器投資、先進製程、記憶體循環與美國科技股資本支出影響",
+        "接下來要確認大型雲端業者資本支出、晶片交期、庫存與終端需求是否同步改善",
+    ),
+    "金融與利率": (
+        "主要受中央銀行政策、存放款利差、債券評價與市場資金成本影響",
+        "接下來要觀察利率方向、殖利率曲線、逾期放款與保險業避險成本",
+    ),
+    "能源與原物料": (
+        "主要受供需缺口、地緣政治、美元走勢與運輸成本影響",
+        "接下來要觀察油價與金屬價格是否持續、企業能否轉嫁成本，以及庫存變化",
+    ),
+    "電子與科技": (
+        "主要受企業換機需求、雲端投資、消費電子庫存與新產品週期影響",
+        "接下來要確認營收是否跟上題材、毛利率是否改善，以及供應鏈訂單能見度",
+    ),
+    "航運與供應鏈": (
+        "主要受運價、港口效率、航線安全、旺季需求與全球貿易量影響",
+        "接下來要觀察運價能否維持、塞港是否惡化，以及新增運力是否壓低報價",
+    ),
+    "消費與零售": (
+        "主要受家庭所得、通膨、就業、利率與消費信心影響",
+        "接下來要觀察同店銷售、客單價、庫存折價與民眾實質購買力",
+    ),
+    "生技醫療": (
+        "主要受新藥進度、臨床結果、法規審查、授權合作與健保政策影響",
+        "接下來要確認研發里程碑、現金可支應期間，以及產品是否真正開始貢獻收入",
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -79,14 +109,22 @@ def analyze_market_and_news(raw_root: Path, news_payload: dict[str, object]) -> 
         )
         trends.append(TrendResult(name, days, direction, round(score, 1), narrative))
 
-    taiwan = _regional_text("台灣", markets, items, ("台股市場", "產業科技"), ("台灣加權指數", "SOX"))
-    global_text = _regional_text("全球", markets, items, ("美股國際",), ("S&P 500", "Nasdaq 100", "VIX"))
+    taiwan_detail = _regional_analysis(
+        "台灣", markets, items, ("台股市場", "產業科技"),
+        ("台灣加權指數", "SOX"),
+    )
+    global_detail = _regional_analysis(
+        "全球", markets, items, ("美股國際",),
+        ("S&P 500", "Nasdaq 100", "SOX"),
+    )
     latest_dates = [frame["date"].max() for frame in markets.values() if not frame.empty]
     market_as_of = max(latest_dates).strftime("%Y/%m/%d") if latest_dates else "無可用日期"
     return {
         "trends": trends,
-        "taiwan": taiwan,
-        "global": global_text,
+        "taiwan": taiwan_detail["narrative"],
+        "global": global_detail["narrative"],
+        "taiwan_detail": taiwan_detail,
+        "global_detail": global_detail,
         "taiwan_industries": _industry_trends(items, ("台股市場", "產業科技", "投資理財"), "台灣"),
         "global_industries": _industry_trends(items, ("美股國際", "產業科技"), "全球"),
         "plan": _planning_text(trends, negative_count, positive_count),
@@ -105,7 +143,9 @@ def _read_market(path: Path, today: pd.Timestamp) -> pd.DataFrame:
     if date_column not in frame or "close" not in frame:
         return pd.DataFrame(columns=["date", "close"])
     result = pd.DataFrame({
-        "date": pd.to_datetime(frame[date_column], errors="coerce").dt.tz_localize(None),
+        "date": pd.to_datetime(
+            frame[date_column], format="mixed", errors="coerce"
+        ).dt.tz_localize(None),
         "close": pd.to_numeric(frame["close"], errors="coerce"),
     }).dropna()
     return result[result["date"] <= today].sort_values("date").drop_duplicates("date", keep="last")
@@ -157,26 +197,75 @@ def _leaders_text(returns: dict[str, float]) -> str:
     return f"相對較強為 {strongest}（{valid[strongest]:+.2f}%），較弱為 {weakest}（{valid[weakest]:+.2f}%）"
 
 
-def _regional_text(
+def _regional_analysis(
     region: str,
     markets: dict[str, pd.DataFrame],
     items: list[dict[str, object]],
     categories: tuple[str, ...],
     market_names: tuple[str, ...],
-) -> str:
+) -> dict[str, object]:
     regional_items = [item for item in items if item.get("category") in categories]
     score, positive, negative = _news_tone(regional_items)
     returns = {
         name: _period_return(markets[name]["close"], 20)
         for name in market_names if name in markets and name != "VIX"
     }
-    direction = _direction(score)
-    return (
-        f"{region}新聞共 {len(regional_items)} 則，文字語氣為{direction}"
-        f"（正向詞 {positive}、風險詞 {negative}）。{_leaders_text(returns)}。"
-        f"白話來說，目前{region}市場的好消息與風險正在拉鋸，"
-        "觀察時要同時確認成交量、利率、匯率與政策變化，不要只看單一新聞標題。"
-    )
+    valid_returns = {name: value for name, value in returns.items() if pd.notna(value)}
+    mean_return = float(np.mean(list(valid_returns.values()))) if valid_returns else 0.0
+    combined_score = float(np.clip(mean_return * 5 + score * 0.25, -100, 100))
+    direction = _direction(combined_score)
+    if mean_return > 2:
+        price_reason = "主要市場仍維持向上結構，代表資金尚未全面撤離"
+    elif mean_return < -2:
+        price_reason = "主要市場近期同步回落，代表投資人正降低風險部位"
+    else:
+        price_reason = "主要市場漲跌幅度不大，表示資金仍在等待更明確的方向"
+    if negative > positive:
+        news_reason = "近期消息較集中在政策、利率、成本或地緣政治風險"
+    elif positive > negative:
+        news_reason = "近期消息較集中在需求、訂單、獲利或資金回流"
+    else:
+        news_reason = "近期正面與風險消息大致相當，尚未形成一致預期"
+    if region == "台灣":
+        structure = (
+            "台灣股市受電子與半導體權值股影響很大，因此美國科技股、費城半導體指數、"
+            "新台幣匯率與外資動向，通常會比單一公司消息更快改變大盤方向。"
+        )
+        outlook = (
+            "接下來若外資由賣轉買、成交量回升且半導體指數止穩，台股較有機會先整理再反彈；"
+            "若新台幣持續走弱、國際科技股再下跌或市場量能萎縮，整理時間可能延長。"
+        )
+    else:
+        structure = (
+            "全球市場同時受到通膨、利率、能源價格、企業獲利與地緣政治影響。"
+            "大型科技股雖能支撐指數，但若公債殖利率與能源成本同時上升，估值壓力會快速增加。"
+        )
+        outlook = (
+            "接下來若通膨降溫、債券殖利率回落且企業財測穩定，全球風險資產可望逐步恢復；"
+            "若油價、美元與市場波動率同步升高，資金可能繼續轉向現金、債券或防禦型產業。"
+        )
+    metrics: list[dict[str, str]] = [
+        {"指標": "綜合判斷", "數值": direction, "用途": "整合價格結構與公開消息後的方向"},
+        {"指標": "20日市場平均變化", "數值": f"{mean_return:+.2f}%", "用途": "確認近期價格實際方向"},
+        {"指標": "正向訊號", "數值": f"{positive:,}", "用途": "需求、獲利、訂單及資金改善訊號"},
+        {"指標": "風險訊號", "數值": f"{negative:,}", "用途": "政策、成本、利率及不確定性訊號"},
+        {"指標": "納入消息", "數值": f"{len(regional_items):,} 則", "用途": "本次分析涵蓋的公開資訊量"},
+    ]
+    for market_name, value in valid_returns.items():
+        metrics.append({
+            "指標": f"{market_name} 20日變化",
+            "數值": f"{value:+.2f}%",
+            "用途": "比較各市場近期價格變化",
+        })
+    return {
+        "direction": direction,
+        "score": round(combined_score, 1),
+        "current": f"{price_reason}；{news_reason}。",
+        "reason": structure,
+        "outlook": outlook,
+        "metrics": metrics,
+        "narrative": f"目前判斷為「{direction}」。{price_reason}；{news_reason}。{structure} {outlook}",
+    }
 
 
 def _industry_trends(
@@ -199,20 +288,36 @@ def _industry_trends(
     results = []
     for count, industry, positive, negative in ranked[:4]:
         if positive > negative:
-            tone = "消息面較正向，但仍需確認實際營收與訂單"
+            tone = "目前支持性消息較多，但價格上漲是否能延續，仍需由營收、訂單與成交量確認"
         elif negative > positive:
-            tone = "風險消息較多，宜留意成本、需求或政策壓力"
+            tone = "目前風險消息較多，短期容易出現較大波動，不宜只因價格下跌就認定已經便宜"
         else:
-            tone = "好壞消息接近，產業方向仍在整理"
-        results.append(f"{industry}：相關新聞 {count} 則，{tone}。")
+            tone = "目前好壞消息接近，市場尚未形成共識，價格可能維持區間整理"
+        cause, watch = INDUSTRY_EXPLANATIONS[industry]
+        results.append(
+            f"**{industry}**：{tone}。形成原因是{cause}。{watch}。"
+            f"本次納入 {count} 則相關公開資訊，應搭配實際財報與價格走勢交叉確認。"
+        )
     return results
 
 
 def _planning_text(trends: list[TrendResult], negative: int, positive: int) -> list[str]:
     short, medium, long = trends
     return [
-        f"短程（5日）：目前為「{short.direction}」，先追蹤量價、VIX及外資動向，不追逐單日急漲急跌。",
-        f"中程（20日）：目前為「{medium.direction}」，採分批研究與定期檢視，設定可承受風險及最大部位。",
-        f"遠程（60日）：目前為「{long.direction}」，以產業競爭力、現金流與估值為主，避免用短期新聞取代基本面。",
-        f"情境規劃：新聞風險詞 {negative}、正向詞 {positive}；準備偏多、盤整、偏空三種方案與退出條件。",
+        f"**短程（約5個交易日）**：目前為「{short.direction}」。短線最容易被消息與資金流向影響，"
+        "應先確認價格方向是否有成交量支持，並觀察外資買賣、VIX與美股前一晚表現。若只有單日急漲、"
+        "但量能與國際市場沒有同步改善，先視為反彈而不是趨勢反轉。",
+        f"**中程（約20個交易日）**：目前為「{medium.direction}」。中程需要確認月營收、法人連續買賣、"
+        "匯率與產業訂單是否朝同一方向發展。研究時採分批觀察，每週重新檢查原本理由是否仍成立，"
+        "不要因短期獲利或虧損就任意改變評估標準。",
+        f"**遠程（約60個交易日以上）**：目前為「{long.direction}」。長期方向應以產業競爭力、自由現金流、"
+        "資產負債與合理估值為核心；短期新聞只能作為風險提醒，不能代替公司基本面的持續改善。",
+        "**每日資料工作**：每天核對台股、美股、法人、匯率、利率、總體與新聞的最新日期、筆數及失敗紀錄。"
+        "任何必要欄位缺漏時，保留上一版結果並標示資料日期，不產生新的正式判斷。",
+        "**模型研究工作**：1日、5日與20日分開訓練、校準與評估。逐步加入價量、法人、總體、基本面及事件資料，"
+        "每加入一類資料都要比較樣本外表現，確認它真的改善結果，而不是只讓訓練資料看起來更漂亮。",
+        "**三種市場情境**：偏多情境需要價格、成交量、法人與國際市場多數同步改善；盤整情境代表訊號互相矛盾，"
+        "以等待與控制部位為主；偏空情境則要預先設定風險上限、失效條件與停止研究條件。",
+        "**績效與風險追蹤**：使用Walk-forward回測，完整扣除手續費、交易稅與滑價。若最近30日與90日命中率下降、"
+        "最大回撤擴大或機率校準失真，降低模型權重、檢查資料漂移，必要時停止發布該模型結果。",
     ]

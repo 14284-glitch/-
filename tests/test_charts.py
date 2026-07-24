@@ -9,6 +9,7 @@ from config.indicator_glossary import INDICATOR_GLOSSARY, bilingual
 from features.technical_indicators import add_technical_indicators
 from pages.chart_factory import kd_chart, macd_chart, prediction_chart, price_chart, rsi_chart, volume_chart
 from pages.glossary import DATE_RANGE_OPTIONS, _figure_y_bounds, _selected_date_bounds
+from pages.stock_analysis import _load_price_history
 
 
 def sample_prices(rows: int = 260) -> pd.DataFrame:
@@ -155,6 +156,18 @@ class ChartDesignTests(unittest.TestCase):
     def test_all_stock_analysis_charts_default_to_seven_days(self) -> None:
         stock_source = (Path(__file__).parents[1] / "pages" / "stock_analysis.py").read_text(encoding="utf-8")
         self.assertEqual(stock_source.count('default_period="7天"'), 5)
+
+    def test_stock_analysis_accepts_mixed_date_formats(self) -> None:
+        path = Path(self._testMethodName + ".csv")
+        try:
+            frame = sample_prices(2)
+            frame["trade_date"] = ["2026-07-23 00:00:00", "2026-07-24"]
+            frame.to_csv(path, index=False)
+            loaded = _load_price_history(path)
+            self.assertTrue(pd.api.types.is_datetime64_any_dtype(loaded["trade_date"]))
+            self.assertEqual(len(loaded), 2)
+        finally:
+            path.unlink(missing_ok=True)
 
     def test_plotly_config_removes_all_in_chart_zoom_controls(self) -> None:
         from config.color_config import PLOTLY_CONFIG

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sqlite3
 
 import pandas as pd
 import streamlit as st
@@ -10,6 +11,7 @@ import streamlit as st
 from config.color_config import COLORS
 from config.settings import PROJECT_ROOT
 from config.universe import TAIWAN_50_CONSTITUENTS, load_popular_etfs
+from database.sqlite_repository import SQLiteRepository
 from models.research_forecaster import forecast_from_price_history
 from pages.chart_factory import prediction_chart
 from pages.glossary import prediction_legend_items, render_chart_with_legend, render_glossary
@@ -36,7 +38,9 @@ def load_prediction_data(path: Path = PREDICTION_PATH) -> tuple[pd.DataFrame, st
         return frame, "預測檔案目前沒有資料"
     if "trade_date" not in frame.columns:
         return pd.DataFrame(), "預測資料缺少交易日期欄位 trade_date"
-    frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce")
+    frame["trade_date"] = pd.to_datetime(
+        frame["trade_date"], format="mixed", errors="coerce"
+    )
     frame = frame.dropna(subset=["trade_date"]).sort_values("trade_date")
     if frame.empty:
         return frame, "預測資料沒有有效的交易日期"
@@ -116,10 +120,26 @@ def _render_research_forecast(symbol: str) -> None:
         f"資料截至：{result['data_date']:%Y/%m/%d}｜最新收盤 {result['latest_close']:,.2f}｜"
         f"20日支撐 {result['support_20']:,.2f}｜20日壓力 {result['resistance_20']:,.2f}"
     )
+    inventory = _data_inventory(symbol)
+    st.markdown("#### 歷史資料完整度")
+    st.dataframe(
+        pd.DataFrame(inventory),
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "資料類別": st.column_config.TextColumn("資料類別"),
+            "筆數": st.column_config.NumberColumn("有效筆數", format="%d"),
+            "起始日期": st.column_config.TextColumn("起始日期"),
+            "最新日期": st.column_config.TextColumn("最新日期"),
+            "使用狀態": st.column_config.TextColumn("使用狀態"),
+            "說明": st.column_config.TextColumn("資料用途與限制"),
+        },
+    )
     stage_columns = st.columns(4)
     for column, (stage, available) in zip(stage_columns, result["stage_availability"].items()):
         with column:
-            st.metric(stage, "已接入" if available else "等待歷史資料")
+            unavailable = "尚待正式公告資料" if "基本面" in stage else "尚未接入"
+            st.metric(stage, "已接入" if available else unavailable)
     cards = st.columns(3)
     for column, forecast in zip(cards, result["forecasts"]):
         with column:
@@ -147,13 +167,77 @@ def _render_research_forecast(symbol: str) -> None:
         st.dataframe(pd.DataFrame([
             {"資料類別": "價格、成交量與技術指標", "目前狀態": "已使用", "內容": "OHLC、成交量、報酬、波動、均線、RSI、KD、MACD、布林"},
             {"資料類別": "大盤、產業與前一晚美股", "目前狀態": "已使用", "內容": "台股、美股、費半、VIX、ADR、匯率、美債已用嚴格前一交易日對齊"},
-            {"資料類別": "法人、籌碼與衍生品", "目前狀態": "已接入" if stages["第二階段｜法人籌碼與衍生品"] else "等待歷史點時資料", "內容": "三大法人、融資券、借券、期權、主力與集保"},
-            {"資料類別": "基本面與估值", "目前狀態": "已接入" if stages["第三階段｜基本面估值與產業"] else "等待歷史點時資料", "內容": "營收、財報、現金流、ROE、估值與產業供需"},
-            {"資料類別": "總體經濟", "目前狀態": "部分蒐集", "內容": "美債、匯率、VIX已蒐集；CPI、PMI、GDP等待點時資料庫"},
-            {"資料類別": "新聞、事件與情緒", "目前狀態": "已接入" if stages["第四階段｜新聞情緒與事件"] else "等待歷史點時資料", "內容": "需包含去重、來源可信度、公布時間與台股有效交易日"},
+            {"資料類別": "法人、籌碼與衍生品", "目前狀態": "已接入" if stages["第二階段｜法人籌碼與衍生品"] else "資料不足", "內容": "已使用三大法人、融資券與借券；期權、主力與集保仍需其他授權來源"},
+            {
+                "資料類別": "基本面與估值",
+                "目前狀態": "已接入最近一次資料" if stages["第三階段｜基本面估值與產業"] else "尚待正式公告資料",
+                "內容": (
+                    "使用預測日以前最近一次已公告的月營收、財報、PER、PBR與殖利率；每日排程更新，舊日期不會使用後來才公布的資料"
+                    if stages["第三階段｜基本面估值與產業"]
+                    else "等待附公告時間的基本面與估值資料；未取得前不以事後資料替代"
+                ),
+            },
+            {"資料類別": "總體經濟", "目前狀態": "已接入", "內容": "FRED／ALFRED點時資料已包含美債、匯率、VIX、CPI、PPI、GDP與失業率"},
+            {"資料類別": "新聞、事件與情緒", "目前狀態": "已接入" if stages["第四階段｜新聞情緒與事件"] else "資料不足", "內容": "已依公開時間轉成台股有效交易日，並計算5日情緒與20日事件風險"},
             {"資料類別": "逐筆、大單小單與週轉率", "目前狀態": "資料來源不足", "內容": "目前日線來源沒有逐筆成交與完整流通股數"},
         ]), hide_index=True, width="stretch")
     st.info(
         "研究模型使用當時以前的歷史列尋找相似情境，未使用未來資料；"
         "正式上線仍需補足5年以上歷史、Walk-forward回測與交易成本驗證。"
     )
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _data_inventory(symbol: str) -> list[dict[str, object]]:
+    database = PROJECT_ROOT / "data" / "stock_predictor.db"
+    stock_id = symbol.removesuffix(".TW")
+    rows: list[dict[str, object]] = []
+    if not database.exists():
+        return [{
+            "資料類別": "後台資料庫", "筆數": 0, "起始日期": "—", "最新日期": "—",
+            "使用狀態": "資料庫不存在", "說明": "請先執行系統更新",
+        }]
+    SQLiteRepository(database).initialize()
+    definitions = [
+        (
+            "個股價格與成交量", "tw_stock_daily", "trade_date",
+            "REPLACE(UPPER(stock_id), '.TW', '') = ?", (stock_id,),
+            "已使用", "OHLC、成交量、還原價格與技術指標",
+        ),
+        (
+            "法人與籌碼", "institutional_trading", "trade_date",
+            "REPLACE(UPPER(stock_id), '.TW', '') = ?", (stock_id,),
+            "已使用", "外資、投信、自營商、融資券與借券",
+        ),
+        (
+            "總體經濟", "macro_observation", "observation_date",
+            "1 = 1", (),
+            "已使用", "FRED／ALFRED點時歷史，不使用事後不可得數值",
+        ),
+        (
+            "新聞與事件", "financial_event", "tw_effective_trade_date",
+            "tw_effective_trade_date IS NOT NULL", (),
+            "已使用", "依公開時間對齊下一個可使用的台股交易日",
+        ),
+        (
+            "基本面與估值", "financial_statement", "effective_trade_date",
+            "REPLACE(UPPER(stock_id), '.TW', '') = ?", (stock_id,),
+            "已使用最近一次資料", "依公告或蒐集時間，使用當時最近一次月營收、財報、PER、PBR與殖利率",
+        ),
+    ]
+    with sqlite3.connect(database) as connection:
+        for label, table, date_column, condition, parameters, state, note in definitions:
+            count, earliest, latest = connection.execute(
+                f"SELECT COUNT(*), MIN({date_column}), MAX({date_column}) "
+                f"FROM {table} WHERE {condition}",
+                parameters,
+            ).fetchone()
+            rows.append({
+                "資料類別": label,
+                "筆數": int(count or 0),
+                "起始日期": str(earliest or "—")[:10],
+                "最新日期": str(latest or "—")[:10],
+                "使用狀態": state if count else "目前無資料",
+                "說明": note,
+            })
+    return rows

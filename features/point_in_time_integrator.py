@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
+import sqlite3
 
 import pandas as pd
 
 
 STAGE2_COLUMNS = ("foreign_net_5d", "institutional_net_5d", "margin_change_5d", "short_change_5d")
-STAGE3_COLUMNS = ("revenue_yoy", "gross_margin", "eps", "roe", "debt_ratio", "free_cash_flow")
+STAGE3_COLUMNS = (
+    "revenue_yoy", "revenue_mom", "gross_margin", "operating_margin",
+    "eps", "roe", "debt_ratio", "free_cash_flow",
+    "pe_ratio", "pb_ratio", "dividend_yield",
+)
 STAGE4_COLUMNS = ("news_sentiment_5d", "news_count_5d", "event_risk_20d")
 
 
@@ -39,10 +45,24 @@ def _attach_institutional(
     frame: pd.DataFrame, path: Path, stock_id: str
 ) -> tuple[pd.DataFrame, bool]:
     data = _read_stock_file(path, stock_id)
+    if data.empty:
+        data = _read_institutional_database(path.parent.parent / "stock_predictor.db", stock_id)
+    if data.empty:
+        raw_path = (
+            path.parent.parent / "raw" / "institutional"
+            / f"{stock_id.upper().removesuffix('.TW')}.csv"
+        )
+        if raw_path.exists():
+            try:
+                data = pd.read_csv(raw_path)
+            except (OSError, pd.errors.ParserError, UnicodeDecodeError):
+                data = pd.DataFrame()
     required = {"trade_date", "foreign_net", "institutional_net", "margin_change", "short_change"}
     if data.empty or not required.issubset(data.columns):
         return _with_defaults(frame, STAGE2_COLUMNS), False
-    data["trade_date"] = pd.to_datetime(data["trade_date"], errors="coerce").dt.tz_localize(None)
+    data["trade_date"] = pd.to_datetime(
+        data["trade_date"], format="mixed", errors="coerce"
+    ).dt.tz_localize(None)
     data = data.dropna(subset=["trade_date"]).sort_values("trade_date")
     for source, output in (
         ("foreign_net", "foreign_net_5d"),
@@ -61,12 +81,27 @@ def _attach_fundamental(
     frame: pd.DataFrame, path: Path, stock_id: str
 ) -> tuple[pd.DataFrame, bool]:
     data = _read_stock_file(path, stock_id)
-    if data.empty or "effective_trade_date" not in data or not set(STAGE3_COLUMNS).issubset(data.columns):
+    legacy_required = {
+        "revenue_yoy", "gross_margin", "eps", "roe",
+        "debt_ratio", "free_cash_flow",
+    }
+    if (
+        data.empty
+        or "effective_trade_date" not in data
+        or not legacy_required.issubset(data.columns)
+    ):
         return _with_defaults(frame, STAGE3_COLUMNS), False
+    for column in STAGE3_COLUMNS:
+        if column not in data:
+            data[column] = 0.0
     data["effective_trade_date"] = pd.to_datetime(
-        data["effective_trade_date"], errors="coerce"
+        data["effective_trade_date"], format="mixed", errors="coerce"
     ).dt.tz_localize(None)
-    data = data.dropna(subset=["effective_trade_date"]).sort_values("effective_trade_date")
+    data = (
+        data.dropna(subset=["effective_trade_date"])
+        .sort_values("effective_trade_date")
+        .drop_duplicates("effective_trade_date", keep="last")
+    )
     for column in STAGE3_COLUMNS:
         data[column] = pd.to_numeric(data[column], errors="coerce")
     joined = pd.merge_asof(
@@ -85,11 +120,15 @@ def _attach_news(
     frame: pd.DataFrame, path: Path, stock_id: str
 ) -> tuple[pd.DataFrame, bool]:
     data = _read_stock_file(path, stock_id, allow_market_rows=True)
+    if data.empty:
+        data = _read_news_database(path.parent.parent / "stock_predictor.db")
+    if data.empty:
+        data = _read_news_cache(path.parent / "financial_news.json")
     required = {"tw_effective_trade_date", "sentiment_score", "news_count", "event_risk"}
     if data.empty or not required.issubset(data.columns):
         return _with_defaults(frame, STAGE4_COLUMNS), False
     data["tw_effective_trade_date"] = pd.to_datetime(
-        data["tw_effective_trade_date"], errors="coerce"
+        data["tw_effective_trade_date"], format="mixed", errors="coerce"
     ).dt.tz_localize(None)
     data = data.dropna(subset=["tw_effective_trade_date"]).sort_values("tw_effective_trade_date")
     daily = data.groupby("tw_effective_trade_date", as_index=False).agg(
@@ -135,3 +174,77 @@ def _with_defaults(frame: pd.DataFrame, columns: tuple[str, ...]) -> pd.DataFram
     for column in columns:
         result[column] = 0.0
     return result
+
+
+def _read_institutional_database(path: Path, stock_id: str) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame()
+    target = stock_id.upper().removesuffix(".TW")
+    query = """
+        SELECT trade_date, foreign_net, institutional_net,
+               margin_change, short_change
+        FROM institutional_trading
+        WHERE REPLACE(UPPER(stock_id), '.TW', '') = ?
+        ORDER BY trade_date
+    """
+    try:
+        with sqlite3.connect(path) as connection:
+            return pd.read_sql_query(query, connection, params=(target,))
+    except (sqlite3.Error, pd.errors.DatabaseError):
+        return pd.DataFrame()
+
+
+def _read_news_database(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame()
+    query = """
+        SELECT tw_effective_trade_date, title, summary
+        FROM financial_event
+        WHERE tw_effective_trade_date IS NOT NULL
+        ORDER BY tw_effective_trade_date
+    """
+    try:
+        with sqlite3.connect(path) as connection:
+            data = pd.read_sql_query(query, connection)
+    except (sqlite3.Error, pd.errors.DatabaseError):
+        return pd.DataFrame()
+    return _score_news_rows(data)
+
+
+def _read_news_cache(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return pd.DataFrame()
+    data = pd.DataFrame(
+        item for item in payload.get("items", []) if isinstance(item, dict)
+    )
+    if data.empty or "published_at" not in data:
+        return pd.DataFrame()
+    published = pd.to_datetime(
+        data["published_at"], format="mixed", errors="coerce", utc=True
+    ).dt.tz_convert("Asia/Taipei")
+    # A news item is usable from the next Taiwan calendar day; the later
+    # as-of merge prevents it from entering any earlier model row.
+    data["tw_effective_trade_date"] = (
+        published.dt.tz_localize(None).dt.normalize() + pd.Timedelta(days=1)
+    )
+    return _score_news_rows(data)
+
+
+def _score_news_rows(data: pd.DataFrame) -> pd.DataFrame:
+    if data.empty:
+        return data
+    positive_terms = ("成長", "上漲", "回升", "獲利", "買超", "突破", "需求強勁")
+    risk_terms = ("下跌", "重挫", "風險", "升息", "通膨", "戰爭", "賣超", "不確定")
+    text = (data["title"].fillna("") + " " + data["summary"].fillna("")).astype(str)
+    positive = text.map(lambda value: sum(term in value for term in positive_terms))
+    negative = text.map(lambda value: sum(term in value for term in risk_terms))
+    denominator = (positive + negative).clip(lower=1)
+    data["sentiment_score"] = (positive - negative) / denominator
+    data["news_count"] = 1.0
+    data["event_risk"] = (negative > positive).astype(float)
+    data["stock_id"] = "MARKET"
+    return data

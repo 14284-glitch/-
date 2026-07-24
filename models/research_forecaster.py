@@ -27,7 +27,9 @@ HORIZON_CONFIG = {
                                                                "twii_return_5d", "nasdaq_prev_return",
                                                                "tsm_prev_return", "twd_prev_change",
                                                                "institutional_net_5d", "margin_change_5d",
-                                                               "revenue_yoy", "news_count_5d")},
+                                                               "revenue_yoy", "revenue_mom",
+                                                               "pe_ratio", "pb_ratio",
+                                                               "dividend_yield", "news_count_5d")},
     20: {"lookback": 250, "flat_threshold": 0.030, "features": ("return_20d", "return_60d", "volume_ratio_20",
                                                                  "volatility_60", "volatility_120",
                                                                  "close_to_ma60", "close_to_ma120",
@@ -38,6 +40,8 @@ HORIZON_CONFIG = {
                                                                  "tnx_prev_change_20d", "short_change_5d",
                                                                  "gross_margin", "eps", "roe",
                                                                  "debt_ratio", "free_cash_flow",
+                                                                 "pe_ratio", "pb_ratio",
+                                                                 "dividend_yield",
                                                                  "event_risk_20d")},
 }
 
@@ -99,7 +103,9 @@ def _prepare_features(
     missing = required - set(frame.columns)
     if missing:
         raise ValueError(f"行情缺少欄位：{', '.join(sorted(missing))}")
-    frame["trade_date"] = pd.to_datetime(frame["trade_date"], errors="coerce").dt.tz_localize(None)
+    frame["trade_date"] = pd.to_datetime(
+        frame["trade_date"], format="mixed", errors="coerce"
+    ).dt.tz_localize(None)
     cutoff = pd.Timestamp(as_of).tz_localize(None) if as_of is not None else pd.Timestamp.now().normalize()
     frame = frame[frame["trade_date"] <= cutoff].sort_values("trade_date").drop_duplicates("trade_date", keep="last")
     for column in ("open", "high", "low", "close", "volume"):
@@ -200,7 +206,9 @@ def _read_external_series(path: Path, date_column: str) -> pd.DataFrame:
         data = pd.read_csv(path, usecols=[date_column, "close"])
     except (OSError, ValueError, pd.errors.ParserError):
         return pd.DataFrame(columns=["date", "close"])
-    data["date"] = pd.to_datetime(data[date_column], errors="coerce").dt.tz_localize(None)
+    data["date"] = pd.to_datetime(
+        data[date_column], format="mixed", errors="coerce"
+    ).dt.tz_localize(None)
     data["close"] = pd.to_numeric(data["close"], errors="coerce")
     return data.dropna().sort_values("date").drop_duplicates("date", keep="last")[["date", "close"]]
 

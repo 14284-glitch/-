@@ -29,7 +29,13 @@ def render() -> None:
             continue
         frame = pd.read_csv(path)
         date_column = "trade_date" if "trade_date" in frame else "us_trade_date"
-        frame[date_column] = pd.to_datetime(frame[date_column])
+        frame[date_column] = pd.to_datetime(
+            frame[date_column], format="mixed", errors="coerce"
+        )
+        frame["close"] = pd.to_numeric(frame["close"], errors="coerce")
+        frame = frame.dropna(subset=[date_column, "close"]).sort_values(date_column)
+        if frame.empty:
+            continue
         frame = frame.tail(252)
         normalized = frame["close"] / frame["close"].iloc[0] * 100
         figure.add_trace(go.Scatter(
@@ -57,8 +63,8 @@ def render() -> None:
 
 def _render_ai_trend_summary() -> None:
     st.divider()
-    st.subheader("AI 綜合財經與市場文字趨勢")
-    st.caption("整合全部新聞快取與目前可用市場數據；短程＝5個交易日、中程＝20日、遠程＝60日。")
+    st.subheader("目前台灣與全球財經趨勢")
+    st.caption("整合目前可取得的市場價格與公開資訊；數據獨立列示，正文以白話說明現況、原因與可能發展。")
     try:
         analysis = analyze_market_and_news(PROJECT_ROOT / "data" / "raw", load_news_cache())
     except Exception as exc:
@@ -70,20 +76,17 @@ def _render_ai_trend_summary() -> None:
             st.markdown(f"#### {trend.name}趨勢｜{trend.trading_days}日")
             st.metric("綜合方向", trend.direction, f"評分 {trend.score:+.1f}")
             st.write(trend.narrative)
-    taiwan_column, global_column = st.columns(2)
-    with taiwan_column:
-        st.markdown("#### 目前台灣財經文字趨勢")
-        st.write(analysis["taiwan"])
-        st.markdown("##### 台灣產業趨勢")
-        for item in analysis["taiwan_industries"]:
-            st.markdown(f"- {item}")
-    with global_column:
-        st.markdown("#### 目前全球財經文字趨勢")
-        st.write(analysis["global"])
-        st.markdown("##### 全球產業趨勢")
-        for item in analysis["global_industries"]:
-            st.markdown(f"- {item}")
+    _render_regional_trend(
+        "目前台灣財經趨勢", analysis["taiwan_detail"], analysis["taiwan_industries"]
+    )
+    _render_regional_trend(
+        "目前全球財經趨勢", analysis["global_detail"], analysis["global_industries"]
+    )
     st.markdown("#### 未來方向與研究規劃")
+    st.write(
+        "研究重點不是猜一個確定答案，而是持續確認哪些條件正在改善、哪些風險正在升高，"
+        "並讓每個判斷都有可檢查的資料、時間範圍與失效條件。"
+    )
     for item in analysis["plan"]:
         st.markdown(f"- {item}")
     st.caption(
@@ -91,3 +94,29 @@ def _render_ai_trend_summary() -> None:
         f"市場序列 {analysis['market_count']} 組｜新聞快取時間：{analysis['news_as_of']}"
     )
     st.info("本區為可解釋的統計與文字綜合分析，只供研究；不是保證預測、買賣指示或個人化投資建議。")
+
+
+def _render_regional_trend(
+    title: str, detail: dict[str, object], industries: list[str]
+) -> None:
+    st.markdown(f"#### {title}")
+    st.markdown("##### 現在的情況")
+    st.write(detail["current"])
+    st.markdown("##### 形成原因")
+    st.write(detail["reason"])
+    st.markdown("##### 接下來可能怎麼發展")
+    st.write(detail["outlook"])
+    st.markdown("##### 觀察數據")
+    st.dataframe(
+        pd.DataFrame(detail["metrics"]),
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "指標": st.column_config.TextColumn("指標"),
+            "數值": st.column_config.TextColumn("目前數值"),
+            "用途": st.column_config.TextColumn("觀看重點"),
+        },
+    )
+    st.markdown("##### 產業趨勢")
+    for item in industries:
+        st.markdown(f"- {item}")

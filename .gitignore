@@ -1,4 +1,5 @@
 .env
+.secrets/
 .venv/
 __pycache__/
 *.py[cod]
@@ -17,3 +18,7 @@ artifacts/models/*
 !artifacts/models/.gitkeep
 service-account*.json
 *.log
+.local-data-backup/
+data/*.db
+data/*.db-shm
+data/*.db-wal

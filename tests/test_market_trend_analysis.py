@@ -32,12 +32,14 @@ def test_analysis_produces_short_medium_long_and_regional_text(tmp_path: Path):
 
     assert [trend.name for trend in result["trends"]] == ["短程", "中程", "遠程"]
     assert [trend.trading_days for trend in result["trends"]] == [5, 20, 60]
-    assert "台灣新聞共" in result["taiwan"]
-    assert "全球新聞共" in result["global"]
+    assert "台灣新聞共" not in result["taiwan"]
+    assert "全球新聞共" not in result["global"]
+    assert result["taiwan_detail"]["metrics"]
+    assert result["global_detail"]["metrics"]
     assert result["taiwan_industries"]
     assert result["global_industries"]
     assert "白話解讀" in result["trends"][0].narrative
-    assert len(result["plan"]) == 4
+    assert len(result["plan"]) >= 7
     assert result["news_count"] == 2
 
 

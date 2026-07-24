@@ -48,7 +48,9 @@ def render_chart_with_legend(
     for trace in figure.data:
         if getattr(trace, "x", None) is not None:
             all_dates.extend(list(trace.x))
-    valid_dates = pd.to_datetime(pd.Series(all_dates), errors="coerce").dropna()
+    valid_dates = pd.to_datetime(
+        pd.Series(all_dates), format="mixed", errors="coerce"
+    ).dropna()
     filter_key = f"chart_period_{date_key}"
     scale_key = f"y_range_{date_key}"
     control_left, control_right = st.columns([3, 1], gap="small")
@@ -167,7 +169,9 @@ def _figure_y_bounds(
                 series_values = pd.Series(list(series))
                 x_values = getattr(trace, "x", None)
                 if x_values is not None and visible_start is not None and visible_end is not None:
-                    dates = pd.to_datetime(pd.Series(list(x_values)), errors="coerce")
+                    dates = pd.to_datetime(
+                        pd.Series(list(x_values)), format="mixed", errors="coerce"
+                    )
                     mask = dates.between(visible_start, visible_end, inclusive="both")
                     series_values = series_values[mask]
                 candidates.extend(series_values.tolist())
@@ -187,7 +191,9 @@ def _values_for_date(figure: go.Figure, selected_date: pd.Timestamp) -> list[str
     for trace in figure.data:
         if trace.name == "觀看提醒" or getattr(trace, "x", None) is None:
             continue
-        dates = pd.to_datetime(pd.Series(list(trace.x)), errors="coerce")
+        dates = pd.to_datetime(
+            pd.Series(list(trace.x)), format="mixed", errors="coerce"
+        )
         matches = dates.dt.normalize() == selected_date.normalize()
         if not matches.any():
             continue

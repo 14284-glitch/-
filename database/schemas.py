@@ -61,6 +61,21 @@ TABLE_SPECS: dict[str, TableSpec] = {
         f("margin_balance", "INT64"), f("margin_change", "INT64"), f("short_balance", "INT64"),
         f("short_change", "INT64"), f("securities_lending", "INT64"), f("updated_at", "TIMESTAMP", "REQUIRED"),
     ), ("stock_id", "trade_date"), "trade_date", ("stock_id",), True),
+    "macro_observation": TableSpec((
+        f("series_id", "STRING", "REQUIRED"), f("series_name", "STRING"),
+        f("observation_date", "DATE", "REQUIRED"), f("vintage_start_date", "DATE", "REQUIRED"),
+        f("vintage_end_date", "DATE"), f("data_available_date", "DATE", "REQUIRED"),
+        f("value", "FLOAT64"), f("updated_at", "TIMESTAMP", "REQUIRED"),
+    ), ("series_id", "observation_date", "vintage_start_date"),
+       "data_available_date", ("series_id",), True),
+    "financial_event": TableSpec((
+        f("event_id", "STRING", "REQUIRED"), f("title", "STRING", "REQUIRED"),
+        f("link", "STRING", "REQUIRED"), f("summary", "STRING"), f("source", "STRING"),
+        f("category", "STRING"), f("published_at", "TIMESTAMP"),
+        f("data_available_datetime", "TIMESTAMP"),
+        f("tw_effective_trade_date", "DATE", "REQUIRED"),
+        f("first_seen_at", "TIMESTAMP", "REQUIRED"), f("last_seen_at", "TIMESTAMP", "REQUIRED"),
+    ), ("event_id",), "tw_effective_trade_date", ("source",), True),
     "financial_statement": TableSpec((
         f("stock_id", "STRING", "REQUIRED"), f("report_period", "DATE", "REQUIRED"),
         f("announcement_datetime", "TIMESTAMP", "REQUIRED", "Actual public announcement time"),
@@ -68,7 +83,9 @@ TABLE_SPECS: dict[str, TableSpec] = {
         f("revenue", "FLOAT64"), f("revenue_yoy", "FLOAT64"), f("revenue_mom", "FLOAT64"),
         f("gross_profit", "FLOAT64"), f("gross_margin", "FLOAT64"), f("operating_income", "FLOAT64"),
         f("operating_margin", "FLOAT64"), f("net_income", "FLOAT64"), f("eps", "FLOAT64"), f("roe", "FLOAT64"),
-        f("debt_ratio", "FLOAT64"), f("free_cash_flow", "FLOAT64"), f("updated_at", "TIMESTAMP", "REQUIRED"),
+        f("debt_ratio", "FLOAT64"), f("free_cash_flow", "FLOAT64"),
+        f("pe_ratio", "FLOAT64"), f("pb_ratio", "FLOAT64"), f("dividend_yield", "FLOAT64"),
+        f("updated_at", "TIMESTAMP", "REQUIRED"),
     ), ("stock_id", "report_period", "announcement_datetime"), "effective_trade_date", ("stock_id",), True),
     "technical_features": TableSpec((
         f("stock_id", "STRING", "REQUIRED"), f("trade_date", "DATE", "REQUIRED"),
@@ -113,4 +130,3 @@ def to_bigquery_schema(table_name: str) -> list[object]:
 
     return [bigquery.SchemaField(item.name, item.field_type, mode=item.mode, description=item.description)
             for item in TABLE_SPECS[table_name].fields]
-

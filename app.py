@@ -1,12 +1,14 @@
 """Streamlit web entry point for the Taiwan stock prediction platform."""
 
 from datetime import datetime
+import os
+import sqlite3
 from zoneinfo import ZoneInfo
 
 import streamlit as st
 
 from config.color_config import COLORS
-from config.settings import get_settings
+from config.settings import PROJECT_ROOT, get_settings
 from pages import backtest_dashboard, financial_news, market_overview, prediction_dashboard, stock_analysis
 from scripts.update_daily_data import UpdateAlreadyRunning, read_last_status, run_update
 
@@ -26,9 +28,55 @@ def render_system_status() -> None:
     if not status:
         st.warning("尚無更新紀錄。")
         return
-    color = COLORS["signal"]["strong_buy"] if status["status"] == "success" else COLORS["signal"]["high_risk"]
-    st.markdown(f"<div style='border-left:5px solid {color};padding:.7rem 1rem'>"
-                f"最後完成：{datetime.fromisoformat(str(status['finished_at'])):%Y-%m-%d %H:%M:%S}（台北時間）"
+    finished_at = datetime.fromisoformat(str(status["finished_at"]))
+    started_at = datetime.fromisoformat(str(status["started_at"]))
+    elapsed_seconds = max(0, int((finished_at - started_at).total_seconds()))
+    status_label = "正常" if status["status"] == "success" else "需要檢查"
+    status_color = (
+        COLORS["signal"]["strong_buy"]
+        if status["status"] == "success"
+        else COLORS["signal"]["high_risk"]
+    )
+    status_columns = st.columns(4)
+    status_columns[0].metric("系統狀態", status_label)
+    status_columns[1].metric("最後更新", finished_at.strftime("%Y/%m/%d %H:%M"))
+    status_columns[2].metric("更新耗時", f"{elapsed_seconds // 60}分 {elapsed_seconds % 60}秒")
+    status_columns[3].metric("觸發方式", {"manual": "手動", "schedule": "排程", "github": "GitHub"}.get(status["trigger"], status["trigger"]))
+
+    settings = get_settings()
+    st.subheader("資料庫狀態")
+    cloud_state = "已連線" if settings.gcp_project_id else "尚未設定"
+    cloud_mode = "免費沙盒模式" if os.getenv("BIGQUERY_SANDBOX_MODE", "false").lower() == "true" else "正式分區模式"
+    database_columns = st.columns(3)
+    database_columns[0].metric("BigQuery", cloud_state)
+    database_columns[1].metric("雲端資料集", settings.bigquery_dataset)
+    database_columns[2].metric("儲存模式", cloud_mode)
+    if settings.gcp_project_id:
+        st.caption(
+            f"Google Cloud 專案：{settings.gcp_project_id}｜"
+            f"地區：{settings.bigquery_location}｜憑證存放於本機安全目錄，不會顯示或上傳。"
+        )
+
+    table_labels = {
+        "tw_stock_daily": "台股行情",
+        "institutional_trading": "法人籌碼",
+        "macro_observation": "總體歷史",
+        "financial_event": "財經事件",
+    }
+    database_path = PROJECT_ROOT / "data" / "stock_predictor.db"
+    if database_path.exists():
+        with sqlite3.connect(database_path) as connection:
+            counts = {
+                label: connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                for table, label in table_labels.items()
+            }
+        count_columns = st.columns(len(counts))
+        for column, (label, count) in zip(count_columns, counts.items()):
+            column.metric(label, f"{count:,} 筆")
+
+    st.subheader("最近一次更新流程")
+    st.markdown(f"<div style='border-left:5px solid {status_color};padding:.7rem 1rem'>"
+                f"最後完成：{finished_at:%Y/%m/%d %H:%M:%S}（台北時間）"
                 f"</div>", unsafe_allow_html=True)
     for step in status.get("steps", []):
         st.write(f"{'✅' if step['status'] == 'success' else '❌'} {step['name']}：{step['message']}")
@@ -109,7 +157,7 @@ def main() -> None:
     }
     renderers[page]()
     sidebar_descriptions = {
-        "財經新聞": "瀏覽最新財經新聞，可依分類、來源或關鍵字篩選。",
+        "財經新聞": "瀏覽最新財經新聞，可使用固定的分類與新聞來源選單篩選。",
         "市場總覽": "比較台股與主要美國市場的相對走勢。",
         "個股分析": "查看K線、均線、成交量與技術指標。",
         "模型預測": "查看已驗證模型產生的預測與不確定區間。",

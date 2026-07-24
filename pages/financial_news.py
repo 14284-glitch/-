@@ -46,7 +46,7 @@ def render() -> None:
         "台股市場", "產業科技", "美股國際", "投資理財",
         "投資人－股魚", "投資人－陳重銘", "投資人－施昇輝", "投資人－華倫老師（周文偉）",
     ]
-    left, middle, right = st.columns([1, 1.4, 2])
+    left, middle = st.columns(2)
     category = left.selectbox(
         "新聞分類",
         categories,
@@ -62,7 +62,6 @@ def render() -> None:
         filter_mode=None,
         help="只能從既有新聞來源中選取，無法新增或修改文字。",
     )
-    keyword = right.text_input("關鍵字篩選", placeholder="例如：台積電、AI、利率")
     now = datetime.now(TAIPEI)
     if category == "本日頭條新聞":
         items = [item for item in items if (published := _published(str(item.get("published_at", "")))) and published.date() == now.date()]
@@ -73,16 +72,13 @@ def render() -> None:
         items = [item for item in items if item.get("category") == category]
     if source != "全部新聞來源":
         items = [item for item in items if item.get("source") == source]
-    if keyword.strip():
-        needle = keyword.strip().casefold()
-        items = [item for item in items if needle in f"{item.get('title', '')} {item.get('summary', '')}".casefold()]
     st.caption(f"最近更新：{_time(str(payload.get('updated_at', '')))}｜目前顯示 {len(items)} 則")
     if payload.get("using_cache"):
         st.warning("新聞來源暫時無法連線，目前顯示最近一次成功更新的內容。")
     for error in payload.get("errors", []):
         st.caption(f"來源提醒：{error}")
     if not items:
-        st.info("目前沒有符合條件的新聞，請更換分類或關鍵字。")
+        st.info("目前沒有符合條件的新聞，請更換新聞分類或新聞來源。")
     for item in items[:60]:
         st.markdown(f"### [{item['title']}]({item['link']})")
         st.caption(f"{item.get('source', '來源未提供')}｜{item.get('category', '其他')}｜{_time(str(item.get('published_at', '')))}")

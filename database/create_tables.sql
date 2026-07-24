@@ -51,6 +51,22 @@ CREATE TABLE IF NOT EXISTS `PROJECT_ID.DATASET_ID.institutional_trading` (
 ) PARTITION BY trade_date CLUSTER BY stock_id
 OPTIONS (require_partition_filter=TRUE);
 
+CREATE TABLE IF NOT EXISTS `PROJECT_ID.DATASET_ID.macro_observation` (
+  series_id STRING NOT NULL, series_name STRING, observation_date DATE NOT NULL,
+  vintage_start_date DATE NOT NULL, vintage_end_date DATE,
+  data_available_date DATE NOT NULL, value FLOAT64, updated_at TIMESTAMP NOT NULL,
+  PRIMARY KEY (series_id, observation_date, vintage_start_date) NOT ENFORCED
+) PARTITION BY data_available_date CLUSTER BY series_id
+OPTIONS (require_partition_filter=TRUE);
+
+CREATE TABLE IF NOT EXISTS `PROJECT_ID.DATASET_ID.financial_event` (
+  event_id STRING NOT NULL, title STRING NOT NULL, link STRING NOT NULL, summary STRING,
+  source STRING, category STRING, published_at TIMESTAMP, data_available_datetime TIMESTAMP,
+  tw_effective_trade_date DATE NOT NULL, first_seen_at TIMESTAMP NOT NULL, last_seen_at TIMESTAMP NOT NULL,
+  PRIMARY KEY (event_id) NOT ENFORCED
+) PARTITION BY tw_effective_trade_date CLUSTER BY source
+OPTIONS (require_partition_filter=TRUE);
+
 CREATE TABLE IF NOT EXISTS `PROJECT_ID.DATASET_ID.financial_statement` (
   stock_id STRING NOT NULL, report_period DATE NOT NULL,
   announcement_datetime TIMESTAMP NOT NULL OPTIONS(description='Actual public announcement time'),
@@ -58,7 +74,9 @@ CREATE TABLE IF NOT EXISTS `PROJECT_ID.DATASET_ID.financial_statement` (
   revenue FLOAT64, revenue_yoy FLOAT64, revenue_mom FLOAT64,
   gross_profit FLOAT64, gross_margin FLOAT64, operating_income FLOAT64,
   operating_margin FLOAT64, net_income FLOAT64, eps FLOAT64, roe FLOAT64,
-  debt_ratio FLOAT64, free_cash_flow FLOAT64, updated_at TIMESTAMP NOT NULL,
+  debt_ratio FLOAT64, free_cash_flow FLOAT64,
+  pe_ratio FLOAT64, pb_ratio FLOAT64, dividend_yield FLOAT64,
+  updated_at TIMESTAMP NOT NULL,
   PRIMARY KEY (stock_id, report_period, announcement_datetime) NOT ENFORCED
 ) PARTITION BY effective_trade_date CLUSTER BY stock_id
 OPTIONS (require_partition_filter=TRUE);
