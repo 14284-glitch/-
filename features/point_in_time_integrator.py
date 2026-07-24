@@ -72,7 +72,17 @@ def _attach_institutional(
     ):
         data[source] = pd.to_numeric(data[source], errors="coerce")
         data[output] = data[source].rolling(5, min_periods=1).sum()
-    joined = frame.merge(data[["trade_date", *STAGE2_COLUMNS]], on="trade_date", how="left")
+    # Institutional figures may be published after the market data file.  Use
+    # the latest row that was already available on each prediction date, never
+    # a later row and never a same-position join that turns a one-day lag into
+    # artificial zeros.
+    joined = pd.merge_asof(
+        frame.sort_values("trade_date"),
+        data[["trade_date", *STAGE2_COLUMNS]].sort_values("trade_date"),
+        on="trade_date",
+        direction="backward",
+        allow_exact_matches=True,
+    )
     joined[list(STAGE2_COLUMNS)] = joined[list(STAGE2_COLUMNS)].fillna(0.0)
     return joined, True
 

@@ -63,3 +63,26 @@ def test_missing_stage_files_are_reported_and_do_not_crash(tmp_path: Path):
     assert joined["foreign_net_5d"].eq(0).all()
     assert joined["revenue_yoy"].eq(0).all()
     assert joined["news_sentiment_5d"].eq(0).all()
+
+
+def test_institutional_features_use_latest_already_published_date(tmp_path: Path):
+    processed = tmp_path / "processed"
+    processed.mkdir()
+    frame = pd.DataFrame({
+        "trade_date": pd.to_datetime(["2026-07-23", "2026-07-24"]),
+        "close": [100, 101],
+    })
+    pd.DataFrame({
+        "stock_id": ["2330"],
+        "trade_date": ["2026-07-23"],
+        "foreign_net": [10],
+        "institutional_net": [20],
+        "margin_change": [30],
+        "short_change": [40],
+    }).to_csv(processed / "institutional_features.csv", index=False)
+
+    joined, stages = attach_point_in_time_features(frame, "2330.TW", processed)
+
+    assert stages["第二階段｜法人籌碼與衍生品"] is True
+    assert joined.loc[0, "foreign_net_5d"] == 10
+    assert joined.loc[1, "foreign_net_5d"] == 10
