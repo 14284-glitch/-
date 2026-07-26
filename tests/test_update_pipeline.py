@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -104,6 +105,24 @@ class UpdatePipelineTests(unittest.TestCase):
                 )
         self.assertEqual(result.status, "warning")
         self.assertEqual(result.steps[0]["status"], "warning")
+
+    def test_warning_cli_result_still_allows_cloud_publish(self) -> None:
+        result = update_daily_data.UpdateResult(
+            started_at="2026-07-26T21:00:00+08:00",
+            finished_at="2026-07-26T21:01:00+08:00",
+            trigger="github",
+            status="warning",
+            host="test",
+            steps=[],
+        )
+        with patch.object(update_daily_data, "run_update", return_value=result), patch(
+            "sys.argv", ["update_daily_data", "--trigger", "github"]
+        ):
+            self.assertEqual(update_daily_data.main(), 0)
+        with patch.object(
+            update_daily_data, "run_update", return_value=replace(result, status="failed")
+        ), patch("sys.argv", ["update_daily_data", "--trigger", "github"]):
+            self.assertEqual(update_daily_data.main(), 1)
 
 
 if __name__ == "__main__":

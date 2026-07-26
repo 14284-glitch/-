@@ -8,3 +8,4 @@ requests>=2.32,<3.0
 yfinance>=0.2.40,<1.0
 exchange-calendars>=4.5,<5.0
 python-dotenv>=1.0,<2.0
+google-cloud-bigquery>=3.25,<4.0

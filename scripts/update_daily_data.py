@@ -292,7 +292,9 @@ def main() -> int:
         print(str(exc), file=sys.stderr)
         return 2
     print(json.dumps(asdict(result), ensure_ascii=False, indent=2))
-    return 0 if result.status == "success" else 1
+    # A warning means usable data was produced with an explicitly reported
+    # fallback. Let the publishing step persist those successful updates.
+    return 1 if result.status == "failed" else 0
 
 
 if __name__ == "__main__":
