@@ -162,5 +162,61 @@ def build_dividend_history(dividends: pd.Series, prices: pd.DataFrame) -> pd.Dat
     return pd.DataFrame(rows).sort_values("除息日期", ascending=False).reset_index(drop=True)
 
 
+def build_announced_dividend_history(announcements: pd.DataFrame, prices: pd.DataFrame) -> pd.DataFrame:
+    """Use announced FinMind dates and values, then observe fill-right from prices."""
+    if announcements is None or announcements.empty:
+        return pd.DataFrame()
+    clean_prices = prices.copy()
+    clean_prices["trade_date"] = pd.to_datetime(clean_prices["trade_date"], errors="coerce").dt.normalize()
+    clean_prices["close"] = pd.to_numeric(clean_prices["close"], errors="coerce")
+    clean_prices = clean_prices.dropna(subset=["trade_date", "close"]).sort_values("trade_date")
+    rows: list[dict[str, object]] = []
+    for _, item in announcements.iterrows():
+        ex_date = pd.to_datetime(item.get("cash_ex_dividend_date"), errors="coerce")
+        stock_ex_date = pd.to_datetime(item.get("stock_ex_right_date"), errors="coerce")
+        effective_ex_date = ex_date if pd.notna(ex_date) else stock_ex_date
+        if pd.isna(effective_ex_date):
+            continue
+        effective_ex_date = effective_ex_date.normalize()
+        before = clean_prices[clean_prices["trade_date"] < effective_ex_date]
+        after = clean_prices[clean_prices["trade_date"] >= effective_ex_date]
+        reference = float(before.iloc[-1]["close"]) if not before.empty else 0.0
+        filled = after[after["close"] >= reference] if reference > 0 else pd.DataFrame()
+        fill_date = filled.iloc[0]["trade_date"] if not filled.empty else pd.NaT
+        cash = max(0.0, safe_number(item.get("cash_dividend")))
+        stock_value = max(0.0, safe_number(item.get("stock_dividend_value")))
+        year_text = str(item.get("year", ""))
+        gregorian_year = _dividend_year(year_text, effective_ex_date.year)
+        rows.append({
+            "年度": gregorian_year,
+            "股利所屬年度": year_text or str(gregorian_year),
+            "公告時間": pd.to_datetime(item.get("announcement_datetime"), errors="coerce"),
+            "除息日期": ex_date,
+            "除權日期": stock_ex_date,
+            "發放日期": pd.to_datetime(item.get("cash_payment_date"), errors="coerce"),
+            "每股現金股利": cash,
+            "股票股利": stock_value,
+            "股票股利配股率": max(0.0, safe_number(item.get("stock_dividend_rate"))),
+            "除息前參考價": reference if reference > 0 else pd.NA,
+            "現金殖利率": cash / reference if reference > 0 else pd.NA,
+            "填息日期": fill_date,
+            "填息天數": int((fill_date - effective_ex_date).days) if pd.notna(fill_date) else pd.NA,
+            "是否完成填息": "是" if pd.notna(fill_date) else "否",
+        })
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).sort_values(
+        ["公告時間", "除息日期"], ascending=False, na_position="last"
+    ).reset_index(drop=True)
+
+
+def _dividend_year(text: str, fallback: int) -> int:
+    digits = "".join(character for character in text.split("年", 1)[0] if character.isdigit())
+    if not digits:
+        return fallback
+    value = int(digits)
+    return value + 1911 if value < 1911 else value
+
+
 def calculation_as_dict(result: DividendCalculation) -> dict[str, float]:
     return asdict(result)

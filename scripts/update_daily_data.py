@@ -168,6 +168,7 @@ def _default_pipeline(raw_dir: Path) -> list[tuple[str, Callable[[], object]]]:
     from database.sqlite_repository import SQLiteRepository
     from collectors.institutional_collector import collect_institutional_history
     from collectors.fundamental_collector import collect_latest_fundamentals
+    from collectors.dividend_collector import collect_dividend_announcements
     from collectors.macro_collector import collect_macro_history
     from config.universe import load_tw_symbols
 
@@ -198,6 +199,15 @@ def _default_pipeline(raw_dir: Path) -> list[tuple[str, Callable[[], object]]]:
             settings.finmind_api_token,
             stock_ids,
             include_statements=False,
+        )
+
+    def dividend_update() -> object:
+        if not settings.finmind_api_token:
+            return {"skipped": "FINMIND_API_TOKEN not configured"}
+        return collect_dividend_announcements(
+            PROJECT_ROOT / "data" / "processed" / "dividends",
+            settings.finmind_api_token,
+            stock_ids,
         )
 
     def bigquery_update() -> object:
@@ -240,6 +250,9 @@ def _default_pipeline(raw_dir: Path) -> list[tuple[str, Callable[[], object]]]:
         ("更新法人與籌碼資料", cached(institutional_update, raw_dir / "institutional")),
         ("更新最近一次基本面與估值", cached(
             fundamental_update, PROJECT_ROOT / "data" / "processed" / "financial_features.csv"
+        )),
+        ("更新最新股利公告與發放日", cached(
+            dividend_update, PROJECT_ROOT / "data" / "processed" / "dividends"
         )),
         ("更新FRED與ALFRED總體資料", cached(macro_update, raw_dir / "macro")),
         ("同步後台歷史資料庫", lambda: SQLiteRepository().sync_project_data(raw_dir, PROJECT_ROOT / "data" / "processed" / "financial_news.json")),

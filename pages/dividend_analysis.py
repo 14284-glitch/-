@@ -9,7 +9,9 @@ import yfinance as yf
 
 from config.color_config import COLORS
 from config.dividend_config import DIVIDEND_DISCLAIMER, REINVESTMENT_DISCLAIMER
+from config.settings import PROJECT_ROOT
 from services.dividend_service import (
+    build_announced_dividend_history,
     build_dividend_history,
     calculate_dividend,
     simulate_reinvestment,
@@ -18,27 +20,52 @@ from pages.glossary import LegendItem, render_chart_with_legend
 
 
 @st.cache_data(ttl=21_600, show_spinner=False)
-def load_dividend_history(symbol: str, price_frame: pd.DataFrame) -> pd.DataFrame:
+def load_dividend_history(symbol: str, price_frame: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+    announcement_path = (
+        PROJECT_ROOT / "data" / "processed" / "dividends" /
+        f"{symbol.removesuffix('.TW')}.csv"
+    )
+    if announcement_path.exists():
+        try:
+            announcements = pd.read_csv(announcement_path)
+            announced = build_announced_dividend_history(
+                announcements, price_frame[["trade_date", "close"]]
+            )
+            if not announced.empty:
+                return announced, "FinMind最新公司股利公告"
+        except (OSError, pd.errors.ParserError, UnicodeDecodeError):
+            pass
     try:
         dividends = yf.Ticker(symbol).dividends
     except Exception:
-        return pd.DataFrame()
-    return build_dividend_history(dividends, price_frame[["trade_date", "close"]])
+        return pd.DataFrame(), "目前無資料"
+    return (
+        build_dividend_history(dividends, price_frame[["trade_date", "close"]]),
+        "Yahoo Finance歷史公司行動（公告快取尚未建立）",
+    )
 
 
 def render(symbol: str, stock_name: str, price_frame: pd.DataFrame) -> None:
     latest_price = float(pd.to_numeric(price_frame["close"], errors="coerce").dropna().iloc[-1])
-    history = load_dividend_history(symbol, price_frame)
+    history, source = load_dividend_history(symbol, price_frame)
     if history.empty:
         st.info("目前資料來源沒有可驗證的股息歷史；系統不會以示範數字冒充真實股利。")
         latest_cash = 0.0
     else:
         latest_cash = _latest_annual_cash(history)
-        _render_summary(symbol, stock_name, latest_price, history, latest_cash, price_frame)
+        latest_stock_rate = float(pd.to_numeric(
+            history.get("股票股利配股率", pd.Series([0.0])), errors="coerce"
+        ).fillna(0).iloc[0])
+        _render_summary(
+            symbol, stock_name, latest_price, history, latest_cash, price_frame, source
+        )
         _render_history(history)
         _render_trends(history)
     st.divider()
-    _render_calculator(symbol, stock_name, latest_price, latest_cash)
+    _render_calculator(
+        symbol, stock_name, latest_price, latest_cash,
+        latest_stock_rate if not history.empty else 0.0,
+    )
 
 
 def _latest_annual_cash(history: pd.DataFrame) -> float:
@@ -48,7 +75,7 @@ def _latest_annual_cash(history: pd.DataFrame) -> float:
 
 def _render_summary(
     symbol: str, stock_name: str, latest_price: float, history: pd.DataFrame,
-    latest_cash: float, price_frame: pd.DataFrame,
+    latest_cash: float, price_frame: pd.DataFrame, source: str,
 ) -> None:
     annual = history.groupby("年度", as_index=False).agg(
         每股現金股利=("每股現金股利", "sum"),
@@ -63,7 +90,9 @@ def _render_summary(
         "是" if len(recent_five) >= 3 and recent_five["每股現金股利"].pct_change().dropna().ge(0).all()
         else "否／仍需觀察"
     )
-    st.caption("股息資料來源：Yahoo Finance 公司行動資料；發放日與股票股利未提供時會明確顯示無資料。")
+    st.caption(
+        f"股息資料來源：{source}。最新公告優先；公告尚未提供的欄位會明確顯示目前無資料。"
+    )
     first = st.columns(4)
     first[0].metric("股票", f"{stock_name}（{symbol.removesuffix('.TW')}）")
     first[1].metric("最新股價", f"NT$ {latest_price:,.2f}")
@@ -83,7 +112,8 @@ def _render_summary(
     fourth[0].metric("近5年平均現金股利", f"NT$ {recent_five['每股現金股利'].mean():,.2f}")
     fourth[1].metric("近5年平均殖利率", f"{recent_five['現金殖利率'].mean():.2%}")
     fourth[2].metric("股利是否穩定成長", growth_stable)
-    st.caption("股票股利：目前 Yahoo Finance 未提供可驗證資料；不以0假設公司沒有配股。")
+    if "公告時間" in history and pd.notna(latest.get("公告時間")):
+        st.caption(f"最近公告時間：{pd.to_datetime(latest['公告時間']):%Y-%m-%d %H:%M:%S}")
 
 
 def _render_history(history: pd.DataFrame) -> None:
@@ -92,8 +122,9 @@ def _render_history(history: pd.DataFrame) -> None:
     years = {"最近5年": 5, "最近10年": 10}.get(period)
     visible = history if years is None else history[history["年度"] >= history["年度"].max() - years + 1]
     display = visible.copy()
-    for column in ("除息日期", "發放日期", "填息日期"):
-        display[column] = display[column].map(_date)
+    for column in ("公告時間", "除息日期", "除權日期", "發放日期", "填息日期"):
+        if column in display:
+            display[column] = display[column].map(_date)
     display["現金殖利率"] = pd.to_numeric(display["現金殖利率"], errors="coerce").map(
         lambda value: f"{value:.2%}" if pd.notna(value) else "目前無資料"
     )
@@ -140,15 +171,20 @@ def _render_trends(history: pd.DataFrame) -> None:
         ), "dividend_growth", default_period="全部日期")
 
 
-def _render_calculator(symbol: str, stock_name: str, latest_price: float, latest_cash: float) -> None:
+def _render_calculator(
+    symbol: str, stock_name: str, latest_price: float, latest_cash: float,
+    latest_stock_rate: float,
+) -> None:
     st.subheader("股息試算機")
     unit = st.radio("輸入持有單位", ("股數", "張數"), horizontal=True)
     holding = st.number_input(f"持有{unit}", min_value=0.0, value=1000.0 if unit == "股數" else 1.0, step=1.0)
     shares = holding if unit == "股數" else holding * 1000
     inputs = st.columns(3)
     cash = inputs[0].number_input("每股現金股利", min_value=0.0, value=float(latest_cash), step=0.1)
-    stock_rate = inputs[1].number_input("股票股利配股率", min_value=0.0, value=0.0, step=0.01,
-                                        help="例如配股率10%請輸入0.10；資料來源未提供時預設為0，可自行修改。")
+    stock_rate = inputs[1].number_input(
+        "股票股利配股率", min_value=0.0, value=float(latest_stock_rate), step=0.01,
+        help="例如配股率10%為0.10；有FinMind最新公告時會自動帶入，仍可自行修改。",
+    )
     cost = inputs[2].number_input("每股買進成本", min_value=0.0, value=float(latest_price), step=0.5)
     more = st.columns(3)
     current = more[0].number_input("目前股價", min_value=0.0, value=float(latest_price), step=0.5)
