@@ -36,6 +36,7 @@ class UpdateResult:
     status: str
     host: str
     steps: list[dict[str, str]]
+    previous: dict[str, object] | None = None
 
 
 class UpdateAlreadyRunning(RuntimeError):
@@ -85,6 +86,7 @@ def start_background_update(trigger: str = "manual") -> int:
     _remove_stale_lock()
     if LOCK_PATH.exists():
         raise UpdateAlreadyRunning("另一個更新程序正在執行，請稍後再試。")
+    previous_status = read_last_status()
     command = [
         sys.executable,
         "-m",
@@ -103,6 +105,20 @@ def start_background_update(trigger: str = "manual") -> int:
     else:
         options["start_new_session"] = True
     process = subprocess.Popen(command, **options)
+    launched_at = datetime.now(TAIPEI)
+    _write_status(UpdateResult(
+        started_at=launched_at.isoformat(),
+        finished_at=launched_at.isoformat(),
+        trigger=trigger,
+        status="running",
+        host=socket.gethostname(),
+        steps=[asdict(StepResult(
+            "啟動雲端資料更新",
+            "running",
+            "已接受更新要求，正在蒐集最新行情、法人、基本面與總體資料。",
+        ))],
+        previous=previous_status,
+    ))
     return int(process.pid)
 
 

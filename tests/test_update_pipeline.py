@@ -52,11 +52,15 @@ class UpdatePipelineTests(unittest.TestCase):
         fake_process = type("Process", (), {"pid": 4321})()
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            with patch.object(update_daily_data, "LOCK_PATH", root / "update.lock"), patch.object(
+            with patch.object(update_daily_data, "STATUS_PATH", root / "status.json"), patch.object(
+                update_daily_data, "LOCK_PATH", root / "update.lock"
+            ), patch.object(
                 update_daily_data.subprocess, "Popen", return_value=fake_process
             ) as popen:
                 pid = update_daily_data.start_background_update("manual")
+                status = update_daily_data.read_last_status()
         self.assertEqual(pid, 4321)
+        self.assertEqual(status["status"], "running")
         popen.assert_called_once()
 
     def test_warning_step_completes_without_red_failure(self) -> None:

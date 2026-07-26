@@ -23,10 +23,21 @@ def _read_update_status_safely() -> dict:
         return {}
 
 
+@st.fragment(run_every="15s")
 def render_system_status() -> None:
     st.header("系統與資料更新")
-    st.info("系統每天於台北時間 07:00、14:00、21:00 自動更新，也可隨時手動更新。")
-    if st.button("🔄 立即更新所有資料", type="primary", width="stretch"):
+    st.info(
+        "更新由網路上的 Streamlit 伺服器執行，不依賴家中電腦。"
+        "系統每天於台北時間 07:00、14:00、21:00 自動更新，也可隨時手動更新。"
+    )
+    status = _read_update_status_safely()
+    is_running = status.get("status") == "running"
+    if st.button(
+        "🔄 正在更新資料…" if is_running else "🔄 立即更新所有資料",
+        type="primary",
+        width="stretch",
+        disabled=is_running,
+    ):
         try:
             # Load the update backend only when requested. An optional cloud
             # dependency must not prevent the rest of the dashboard from opening.
@@ -45,7 +56,6 @@ def render_system_status() -> None:
         st.success("手動更新已在背景啟動。可繼續瀏覽頁面，稍後按下方按鈕查看結果。")
     if st.button("查看最新更新進度", width="stretch"):
         st.rerun()
-    status = _read_update_status_safely()
     if not status:
         st.warning("尚無更新紀錄。")
         return
@@ -57,6 +67,7 @@ def render_system_status() -> None:
         return
     elapsed_seconds = max(0, int((finished_at - started_at).total_seconds()))
     status_label = {
+        "running": "正在更新",
         "success": "正常",
         "warning": "完成，部分沿用快取",
         "failed": "需要檢查",
@@ -66,14 +77,22 @@ def render_system_status() -> None:
         if status["status"] == "success"
         else (
             COLORS["signal"]["bullish"]
-            if status["status"] == "warning"
+            if status["status"] in {"warning", "running"}
             else COLORS["signal"]["high_risk"]
         )
     )
     status_columns = st.columns(4)
     status_columns[0].metric("系統狀態", status_label)
-    status_columns[1].metric("最後更新", finished_at.strftime("%Y/%m/%d %H:%M"))
-    status_columns[2].metric("更新耗時", f"{elapsed_seconds // 60}分 {elapsed_seconds % 60}秒")
+    status_columns[1].metric(
+        "開始時間" if is_running else "最後更新",
+        started_at.strftime("%Y/%m/%d %H:%M") if is_running else finished_at.strftime("%Y/%m/%d %H:%M"),
+    )
+    if is_running:
+        elapsed_seconds = max(
+            0,
+            int((datetime.now(ZoneInfo("Asia/Taipei")) - started_at).total_seconds()),
+        )
+    status_columns[2].metric("目前耗時" if is_running else "更新耗時", f"{elapsed_seconds // 60}分 {elapsed_seconds % 60}秒")
     status_columns[3].metric("觸發方式", {"manual": "手動", "schedule": "排程", "github": "GitHub"}.get(status["trigger"], status["trigger"]))
 
     settings = get_settings()
@@ -107,13 +126,24 @@ def render_system_status() -> None:
         for column, (label, count) in zip(count_columns, counts.items()):
             column.metric(label, f"{count:,} 筆")
 
-    st.subheader("最近一次更新流程")
+    st.subheader("目前更新進度" if is_running else "最近一次更新流程")
     st.markdown(f"<div style='border-left:5px solid {status_color};padding:.7rem 1rem'>"
                 f"最後完成：{finished_at:%Y/%m/%d %H:%M:%S}（台北時間）"
                 f"</div>", unsafe_allow_html=True)
     for step in status.get("steps", []):
-        icon = {"success": "✅", "warning": "⚠️", "failed": "❌"}.get(step["status"], "ℹ️")
+        icon = {"running": "🔄", "success": "✅", "warning": "⚠️", "failed": "❌"}.get(step["status"], "ℹ️")
         st.write(f"{icon} {step['name']}：{step['message']}")
+    if is_running and isinstance(status.get("previous"), dict):
+        previous = status["previous"]
+        st.subheader("上一次完成的更新內容")
+        try:
+            previous_finished = datetime.fromisoformat(str(previous["finished_at"]))
+            st.caption(f"完成時間：{previous_finished:%Y/%m/%d %H:%M:%S}（台北時間）")
+        except (KeyError, TypeError, ValueError):
+            pass
+        for step in previous.get("steps", []):
+            icon = {"success": "✅", "warning": "⚠️", "failed": "❌"}.get(step.get("status"), "ℹ️")
+            st.write(f"{icon} {step.get('name', '更新項目')}：{step.get('message', '')}")
 
 
 def main() -> None:
@@ -202,7 +232,7 @@ def main() -> None:
     st.sidebar.divider()
     st.sidebar.caption(f"目前台北時間：{datetime.now(ZoneInfo('Asia/Taipei')):%Y-%m-%d %H:%M:%S}")
     st.sidebar.caption("本系統僅供研究，不構成投資建議。")
-    st.sidebar.caption("介面版本：2026.07.24-41（雲端啟動修正版）")
+    st.sidebar.caption("介面版本：2026.07.26-42（雲端更新狀態修正版）")
 
 
 if __name__ == "__main__":
