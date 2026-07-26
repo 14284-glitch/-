@@ -1,9 +1,9 @@
 {
-  "started_at": "2026-07-26T21:12:30.165407+08:00",
-  "finished_at": "2026-07-26T21:20:35.120462+08:00",
-  "trigger": "schedule",
-  "status": "warning",
-  "host": "DESKTOP-VADCFRO",
+  "started_at": "2026-07-26T21:45:27.381533+08:00",
+  "finished_at": "2026-07-26T21:46:00.916586+08:00",
+  "trigger": "github",
+  "status": "success",
+  "host": "runnervmvrwv9",
   "steps": [
     {
       "name": "更新財經新聞",
@@ -28,17 +28,17 @@
     {
       "name": "更新法人與籌碼資料",
       "status": "success",
-      "message": "成功 73 項，失敗 0 項"
+      "message": "略過：FINMIND_API_TOKEN not configured"
     },
     {
       "name": "更新最近一次基本面與估值",
-      "status": "warning",
-      "message": "成功更新 50 項；23 個標的暫無新資料，已保留最近成功資料"
+      "status": "success",
+      "message": "略過：FINMIND_API_TOKEN not configured"
     },
     {
       "name": "更新FRED與ALFRED總體資料",
       "status": "success",
-      "message": "成功 12 項，失敗 0 項"
+      "message": "略過：FRED_API_KEY not configured"
     },
     {
       "name": "同步後台歷史資料庫",
@@ -48,7 +48,8 @@
     {
       "name": "同步BigQuery雲端資料庫",
       "status": "success",
-      "message": "成功 0 項，失敗 0 項"
+      "message": "略過：GCP_PROJECT_ID not configured"
     }
-  ]
+  ],
+  "previous": null
 }
