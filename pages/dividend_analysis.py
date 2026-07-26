@@ -14,6 +14,7 @@ from services.dividend_service import (
     build_announced_dividend_history,
     build_dividend_history,
     calculate_dividend,
+    safe_number,
     simulate_reinvestment,
 )
 from pages.glossary import LegendItem, render_chart_with_legend
@@ -50,14 +51,15 @@ def render(symbol: str, stock_name: str, price_frame: pd.DataFrame) -> None:
     history, source = load_dividend_history(symbol, price_frame)
     if history.empty:
         st.info("目前資料來源沒有可驗證的股息歷史；系統不會以示範數字冒充真實股利。")
-        latest_cash = 0.0
+        latest_cash = latest_annual_cash = 0.0
     else:
-        latest_cash = _latest_annual_cash(history)
+        latest_cash = max(0.0, safe_number(history.iloc[0]["每股現金股利"]))
+        latest_annual_cash = _latest_annual_cash(history)
         latest_stock_rate = float(pd.to_numeric(
             history.get("股票股利配股率", pd.Series([0.0])), errors="coerce"
         ).fillna(0).iloc[0])
         _render_summary(
-            symbol, stock_name, latest_price, history, latest_cash, price_frame, source
+            symbol, stock_name, latest_price, history, latest_annual_cash, price_frame, source
         )
         _render_history(history)
         _render_trends(history)
@@ -79,6 +81,7 @@ def _render_summary(
 ) -> None:
     annual = history.groupby("年度", as_index=False).agg(
         每股現金股利=("每股現金股利", "sum"),
+        股票股利=("股票股利", "sum"),
         現金殖利率=("現金殖利率", "sum"),
     ).sort_values("年度")
     recent_five = annual.tail(5)
@@ -93,11 +96,13 @@ def _render_summary(
     st.caption(
         f"股息資料來源：{source}。最新公告優先；公告尚未提供的欄位會明確顯示目前無資料。"
     )
-    first = st.columns(4)
+    latest_stock = max(0.0, safe_number(latest.get("股票股利")))
+    first = st.columns(5)
     first[0].metric("股票", f"{stock_name}（{symbol.removesuffix('.TW')}）")
     first[1].metric("最新股價", f"NT$ {latest_price:,.2f}")
     first[2].metric("最新年度現金股利", f"NT$ {latest_cash:,.2f}")
-    first[3].metric("預估現金殖利率", f"{latest_cash / latest_price:.2%}" if latest_price else "0.00%")
+    first[3].metric("最新公告股票股利", f"NT$ {latest_stock:,.2f}")
+    first[4].metric("預估現金殖利率", f"{latest_cash / latest_price:.2%}" if latest_price else "0.00%")
     second = st.columns(4)
     second[0].metric("配息頻率", frequency_text)
     second[1].metric("最近除息日", _date(latest["除息日期"]))
@@ -137,11 +142,12 @@ def _render_history(history: pd.DataFrame) -> None:
 def _render_trends(history: pd.DataFrame) -> None:
     annual = history.groupby("年度", as_index=False).agg(
         每股現金股利=("每股現金股利", "sum"),
+        股票股利=("股票股利", "sum"),
         現金殖利率=("現金殖利率", "sum"),
         填息天數=("填息天數", "mean"),
     ).sort_values("年度")
     annual["年度股利成長率"] = annual["每股現金股利"].pct_change()
-    tabs = st.tabs(("現金股利與殖利率", "填息天數", "年度股利成長率"))
+    tabs = st.tabs(("現金股利與殖利率", "股票股利", "填息天數", "年度股利成長率"))
     with tabs[0]:
         figure = go.Figure()
         figure.add_bar(x=annual["年度"], y=annual["每股現金股利"], name="每股現金股利",
@@ -154,13 +160,25 @@ def _render_trends(history: pd.DataFrame) -> None:
             LegendItem("cash_yield", "Dividend Yield", COLORS["dividend"]["yield"], "solid", "高殖利率需搭配獲利與配息持續性判讀。"),
         ), "dividend_cash_yield", default_period="全部日期")
     with tabs[1]:
+        figure = go.Figure(go.Bar(
+            x=annual["年度"], y=annual["股票股利"], name="股票股利",
+            marker_color=COLORS["dividend"]["shares"],
+        ))
+        _layout(figure, "年度股票股利趨勢", "股票股利（元／股）")
+        render_chart_with_legend(figure, (
+            LegendItem(
+                "stock_dividend", "Stock Dividend", COLORS["dividend"]["shares"], "solid",
+                "股票股利每1元通常相當於每股配發0.1股，仍以公司公告為準。",
+            ),
+        ), "stock_dividend_trend", default_period="全部日期")
+    with tabs[2]:
         figure = go.Figure(go.Scatter(x=annual["年度"], y=annual["填息天數"], mode="lines+markers",
                                       name="平均填息天數", line={"color": COLORS["dividend"]["fill_days"], "width": 3}))
         _layout(figure, "年度平均填息天數", "天數")
         render_chart_with_legend(figure, (
             LegendItem("fill_days", "Fill-right Days", COLORS["dividend"]["fill_days"], "solid", "天數越短代表歷史上較快回到除息前參考價。"),
         ), "dividend_fill_days", default_period="全部日期")
-    with tabs[2]:
+    with tabs[3]:
         colors = [COLORS["candlestick"]["up"] if value >= 0 else COLORS["candlestick"]["down"]
                   for value in annual["年度股利成長率"].fillna(0)]
         figure = go.Figure(go.Bar(x=annual["年度"], y=annual["年度股利成長率"] * 100,
