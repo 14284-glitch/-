@@ -137,7 +137,7 @@ def run_update(trigger: str = "manual", steps: list[tuple[str, Callable[[], obje
                 step_status = (
                     "warning"
                     if isinstance(detail, dict) and (
-                        detail.get("warning") or detail.get("failed")
+                        detail.get("warning") or detail.get("failed") or detail.get("skipped")
                     )
                     else "success"
                 )

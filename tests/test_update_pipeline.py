@@ -92,6 +92,19 @@ class UpdatePipelineTests(unittest.TestCase):
         self.assertEqual(result.status, "warning")
         self.assertIn("保留最近成功資料", result.steps[0]["message"])
 
+    def test_missing_cloud_secret_is_reported_as_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(update_daily_data, "STATUS_PATH", root / "status.json"), patch.object(
+                update_daily_data, "LOCK_PATH", root / "update.lock"
+            ):
+                result = update_daily_data.run_update(
+                    "github",
+                    steps=[("法人資料", lambda: {"skipped": "FINMIND_API_TOKEN not configured"})],
+                )
+        self.assertEqual(result.status, "warning")
+        self.assertEqual(result.steps[0]["status"], "warning")
+
 
 if __name__ == "__main__":
     unittest.main()
