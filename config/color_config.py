@@ -13,6 +13,10 @@ COLORS = {
     "backtest": {"strategy": "#0072B2", "benchmark": "#7F7F7F", "cash": "#E69F00", "drawdown": "#D62728", "zero": "#000000"},
     "signal": {"strong_buy": "#8B0000", "bullish": "#FF4500", "neutral": "#808080", "bearish": "#9ACD32", "high_risk": "#006400"},
     "market": {"twii": "#D62728", "sp500": "#0072B2", "nasdaq100": "#E69F00", "sox": "#7B2CBF", "vix": "#006400"},
+    "dividend": {
+        "cash": "#0072B2", "yield": "#E69F00", "fill_days": "#7B2CBF",
+        "growth": "#D62728", "shares": "#009E73", "asset_value": "#56B4E9",
+    },
     "layout": {
         "grid": "rgba(127,127,127,0.18)", "axis": "#6B7280", "background": "rgba(0,0,0,0)",
         "tooltip_background": "#000000", "tooltip_text": "#FFFFFF", "tooltip_border": "#FFFFFF",

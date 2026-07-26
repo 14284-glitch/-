@@ -185,6 +185,10 @@ def _render_research_forecast(symbol: str) -> None:
         "研究模型使用當時以前的歷史列尋找相似情境，未使用未來資料；"
         "正式上線仍需補足5年以上歷史、Walk-forward回測與交易成本驗證。"
     )
+    st.warning(
+        "AI預測是依歷史資料、技術指標、財務資料及模型計算所得，僅供研究及投資參考，"
+        "不保證未來價格走勢，亦不構成買進、賣出或持有建議。"
+    )
 
 
 @st.cache_data(ttl=600, show_spinner=False)
