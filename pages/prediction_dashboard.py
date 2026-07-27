@@ -149,7 +149,12 @@ def _render_research_forecast(symbol: str) -> None:
                 forecast.probability_sideways,
                 forecast.expected_return,
             )
-            st.markdown(f"#### 未來{forecast.horizon}日｜{direction}")
+            direction_color = _direction_color(direction)
+            st.markdown(
+                f'#### 未來{forecast.horizon}日｜'
+                f'<span style="color:{direction_color};font-weight:800">{direction}</span>',
+                unsafe_allow_html=True,
+            )
             st.write(
                 f"上漲 {forecast.probability_up:.1%}｜"
                 f"盤整 {forecast.probability_sideways:.1%}｜"
@@ -224,6 +229,15 @@ def _direction_hint(
     else:
         direction = "可能盤整"
     return direction, f"三種情境中「{direction.removeprefix('可能')}」機率相對最高（{highest:.1%}）"
+
+
+def _direction_color(direction: str) -> str:
+    """Use Taiwan-market red-up/green-down colors from the shared palette."""
+    return {
+        "可能上漲": COLORS["candlestick"]["up"],
+        "可能下跌": COLORS["candlestick"]["down"],
+        "可能盤整": COLORS["signal"]["neutral"],
+    }.get(direction, COLORS["signal"]["neutral"])
 
 
 @st.cache_data(ttl=600, show_spinner=False)

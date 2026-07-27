@@ -6,7 +6,8 @@ import pandas as pd
 import pytest
 
 from models.research_forecaster import attach_external_market_features, forecast_from_price_history
-from pages.prediction_dashboard import _direction_hint, load_prediction_data
+from config.color_config import COLORS
+from pages.prediction_dashboard import _direction_color, _direction_hint, load_prediction_data
 from config.universe import TAIWAN_50_CONSTITUENTS, load_popular_etfs
 
 
@@ -44,6 +45,12 @@ def test_direction_hint_uses_each_horizon_probability(
     direction, note = _direction_hint(up, down, sideways, expected_return)
     assert direction == expected
     assert "機率相對最高" in note
+
+
+def test_direction_colors_use_shared_taiwan_market_palette():
+    assert _direction_color("可能上漲") == COLORS["candlestick"]["up"]
+    assert _direction_color("可能下跌") == COLORS["candlestick"]["down"]
+    assert _direction_color("可能盤整") == COLORS["signal"]["neutral"]
 
 
 def _write_forecast_history(path: Path, rows: int = 520) -> None:
