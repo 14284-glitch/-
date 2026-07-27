@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-07-27T00:31:33.368593+08:00",
-  "finished_at": "2026-07-27T00:34:27.168703+08:00",
+  "started_at": "2026-07-27T18:58:17.304041+08:00",
+  "finished_at": "2026-07-27T19:03:14.144858+08:00",
   "trigger": "github",
   "status": "warning",
   "host": "runnervmvrwv9",
@@ -42,8 +42,8 @@
     },
     {
       "name": "更新FRED與ALFRED總體資料",
-      "status": "success",
-      "message": "成功 12 項，失敗 0 項"
+      "status": "warning",
+      "message": "成功更新 11 項；1 個標的暫無新資料，已保留最近成功資料"
     },
     {
       "name": "同步後台歷史資料庫",
