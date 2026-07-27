@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Any
 
 import pandas as pd
 
@@ -24,6 +25,8 @@ class BacktestConfig:
     stop_loss: float = 0.08
     take_profit: float = 0.20
     risk_free_rate: float = 0.01
+    include_dividends: bool = False
+    reinvest_dividends: bool = False
 
 
 @dataclass(frozen=True)
@@ -48,7 +51,13 @@ def position_size(cash: float, price: float, config: BacktestConfig) -> int:
     return shares if config.allow_odd_lots else shares // 1000 * 1000
 
 
-def run_backtest(frame: pd.DataFrame, strategy: str, parameters: dict[str, float], config: BacktestConfig) -> BacktestResult:
+def run_backtest(
+    frame: pd.DataFrame,
+    strategy: str,
+    parameters: dict[str, Any],
+    config: BacktestConfig,
+    dividends: pd.DataFrame | None = None,
+) -> BacktestResult:
     if config.initial_capital <= 0:
         raise ValueError("初始本金必須大於0")
     if min(config.commission_rate, config.transaction_tax_rate, config.slippage_rate) < 0:
@@ -59,11 +68,27 @@ def run_backtest(frame: pd.DataFrame, strategy: str, parameters: dict[str, float
     data = generate_signals(frame, strategy, parameters)
     cash, shares, entry_price, entry_date, entry_cost = config.initial_capital, 0, 0.0, None, 0.0
     pending: tuple[str, str, pd.Timestamp] | None = None
+    dividend_by_date = _dividend_schedule(dividends)
+    dividend_pool, total_dividends, pending_reinvest = 0.0, 0.0, False
     trades, equity_rows = [], []
     trade_id = 0
     for i, row in data.iterrows():
         date = pd.Timestamp(row["trade_date"])
         open_price, close = float(row["open"]), float(row["close"])
+        if pending_reinvest and shares > 0 and dividend_pool > 0:
+            execution = open_price * (1 + config.slippage_rate)
+            unit_cost = execution * (1 + config.commission_rate)
+            added = math.floor(dividend_pool / unit_cost)
+            if not config.allow_odd_lots:
+                added = added // 1000 * 1000
+            if added > 0:
+                gross = execution * added
+                commission = transaction_cost(gross, config.commission_rate, config.minimum_commission)
+                if gross + commission <= cash:
+                    cash -= gross + commission
+                    shares += added
+                    dividend_pool = max(0.0, dividend_pool - gross - commission)
+            pending_reinvest = False
         if pending:
             side, reason, signal_date = pending
             pending = None
@@ -97,8 +122,19 @@ def run_backtest(frame: pd.DataFrame, strategy: str, parameters: dict[str, float
                 pending = ("賣出", "策略出場", date)
         elif bool(row["entry_signal"]):
             pending = ("買進", "策略進場", date)
+        dividend_income = 0.0
+        if config.include_dividends and shares > 0:
+            dividend_income = shares * dividend_by_date.get(date.normalize(), 0.0)
+            if dividend_income > 0:
+                cash += dividend_income
+                total_dividends += dividend_income
+                dividend_pool += dividend_income
+                pending_reinvest = config.reinvest_dividends
         total = cash + shares * close
-        equity_rows.append({"date": date, "cash": cash, "position_value": shares * close, "total_equity": total})
+        equity_rows.append({
+            "date": date, "cash": cash, "position_value": shares * close,
+            "total_equity": total, "dividend_income": dividend_income,
+        })
     if shares > 0:
         last = data.iloc[-1]
         date, price = pd.Timestamp(last["trade_date"]), float(last["close"])
@@ -106,12 +142,29 @@ def run_backtest(frame: pd.DataFrame, strategy: str, parameters: dict[str, float
             trades, trade_id, config, date, date, price, price, shares, cash,
             entry_price, entry_date, entry_cost, "回測結束平倉",
         )
-        equity_rows[-1] = {"date": date, "cash": cash, "position_value": 0.0, "total_equity": cash}
+        equity_rows[-1].update({"cash": cash, "position_value": 0.0, "total_equity": cash})
     equity, trades_frame = pd.DataFrame(equity_rows), pd.DataFrame(trades)
     if not equity.empty:
         equity["drawdown"] = equity["total_equity"] / equity["total_equity"].cummax() - 1
     metrics = calculate_metrics(equity, trades_frame, config.initial_capital, config.risk_free_rate)
+    metrics["total_dividends"] = total_dividends
     return BacktestResult(equity, trades_frame, data, metrics, int(data.attrs.get("warmup_periods", 0)))
+
+
+def _dividend_schedule(dividends: pd.DataFrame | None) -> dict[pd.Timestamp, float]:
+    if dividends is None or dividends.empty:
+        return {}
+    date_column = "cash_payment_date" if "cash_payment_date" in dividends else "cash_ex_dividend_date"
+    if date_column not in dividends or "cash_dividend" not in dividends:
+        return {}
+    result: dict[pd.Timestamp, float] = {}
+    for _, row in dividends.iterrows():
+        date = pd.to_datetime(row[date_column], errors="coerce")
+        value = pd.to_numeric(row["cash_dividend"], errors="coerce")
+        if pd.notna(date) and pd.notna(value) and float(value) > 0:
+            normalized = pd.Timestamp(date).normalize()
+            result[normalized] = result.get(normalized, 0.0) + float(value)
+    return result
 
 
 def _sell(trades, trade_id, config, signal_date, date, market_price, close, shares, cash, entry_price, entry_date, entry_cost, reason):

@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
+from dataclasses import asdict, replace
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from backtest.backtester import BacktestConfig, BacktestResult, run_backtest
+from backtest.optimizer import (
+    optimize_ma,
+    training_validation_analysis,
+    walk_forward_analysis,
+)
 from backtest.performance import monthly_returns
+from backtest.storage import delete_strategy, load_strategies, save_strategy
 from backtest.strategy import STRATEGIES
 from config.color_config import COLORS
 from config.settings import PROJECT_ROOT, get_settings
@@ -32,7 +38,8 @@ def render() -> None:
     if frame is None:
         return
     settings = get_settings()
-    setup, results_tab, trades_tab, export_tab = st.tabs(("策略設定", "回測結果", "交易紀錄", "匯出"))
+    tabs = st.tabs(("策略設定", "回測結果", "交易紀錄", "月年度績效", "策略比較", "參數最佳化", "策略儲存與匯出"))
+    setup, results_tab, trades_tab, period_tab, comparison_tab, optimizer_tab, export_tab = tabs
     with setup:
         strategy = st.selectbox("內建策略", STRATEGIES)
         parameters = _strategy_parameters(strategy)
@@ -46,6 +53,8 @@ def render() -> None:
         stop_loss = middle.number_input("固定停損（%）", min_value=0.0, max_value=100.0, value=8.0, step=1.0) / 100
         take_profit = right.number_input("固定停利（%）", min_value=0.0, value=20.0, step=1.0) / 100
         allow_odd_lots = st.checkbox("允許零股交易", value=False)
+        include_dividends = st.checkbox("計入真實現金股息", value=False)
+        reinvest_dividends = st.checkbox("股息於下一交易日自動再投入", value=False, disabled=not include_dividends)
         position_fraction = st.slider("每次投入可用資金比例", 10, 100, 100, 5) / 100
         st.caption("訊號使用當期收盤資料判斷，預設於下一交易日開盤成交；最後一期沒有下一期資料時不執行新訊號。")
         st.caption("交易成本預設值僅供模擬，實際費率依券商折扣、商品類型及當年度法規而異。")
@@ -56,17 +65,22 @@ def render() -> None:
             minimum_commission=minimum_commission, transaction_tax_rate=tax,
             slippage_rate=slippage, position_fraction=position_fraction,
             allow_odd_lots=allow_odd_lots, stop_loss=stop_loss, take_profit=take_profit,
+            include_dividends=include_dividends, reinvest_dividends=reinvest_dividends,
         )
+        dividends = _load_dividends(symbol) if include_dividends else pd.DataFrame()
         try:
             with st.spinner("正在依序產生訊號、模擬下一交易日成交並計算績效…"):
-                result = _cached_run(frame, strategy, parameters, config)
+                result = _cached_run(frame, strategy, parameters, config, dividends)
                 benchmark = _cached_run(
                     frame, "買進持有", {},
                     replace(config, stop_loss=0.0, take_profit=0.0),
+                    dividends,
                 )
             st.session_state["backtest_result"] = result
             st.session_state["backtest_benchmark"] = benchmark
             st.session_state["backtest_context"] = {"symbol": symbol, "name": stock_name, "strategy": strategy}
+            st.session_state["backtest_parameters"] = parameters
+            st.session_state["backtest_config"] = config
         except ValueError as exc:
             st.error(f"無法執行回測：{exc}")
     result = st.session_state.get("backtest_result")
@@ -80,8 +94,14 @@ def render() -> None:
         _render_results(result, benchmark, frame, context)
     with trades_tab:
         _render_trades(result)
+    with period_tab:
+        _render_period_performance(result)
+    with comparison_tab:
+        _render_comparison(frame, st.session_state["backtest_config"])
+    with optimizer_tab:
+        _render_optimizer(frame, strategy, parameters, st.session_state["backtest_config"])
     with export_tab:
-        _render_exports(result, context)
+        _render_exports(result, context, parameters, st.session_state["backtest_config"])
 
 
 def _stock_and_range() -> tuple[pd.DataFrame | None, str, str]:
@@ -139,13 +159,42 @@ def _strategy_parameters(strategy: str) -> dict[str, float]:
     if strategy == "MACD交叉":
         a, b, c = st.columns(3)
         return {"macd_fast": a.number_input("快速期間", 2, 60, 12), "macd_slow": b.number_input("慢速期間", 3, 120, 26), "macd_signal": c.number_input("Signal期間", 2, 60, 9)}
+    if strategy == "KD交叉":
+        a, b, c = st.columns(3)
+        return {"kd_period": a.number_input("KD期間", 3, 60, 9), "kd_low": b.number_input("低檔門檻", 1, 50, 20), "kd_high": c.number_input("高檔門檻", 50, 99, 80)}
+    if strategy in {"布林均值回歸", "布林突破"}:
+        a, b, c = st.columns(3)
+        return {
+            "bollinger_period": a.number_input("布林期間", 5, 120, 20),
+            "bollinger_std": b.number_input("標準差倍數", 0.5, 4.0, 2.0, 0.1),
+            "volume_multiple": c.number_input("突破量能倍數", 1.0, 5.0, 1.5, 0.1),
+        }
+    if strategy == "成交量突破":
+        a, b, c = st.columns(3)
+        return {
+            "breakout_high": a.number_input("突破高點期間", 5, 120, 20),
+            "breakout_low": b.number_input("跌破低點期間", 2, 60, 10),
+            "volume_multiple": c.number_input("成交量倍數", 1.0, 5.0, 1.5, 0.1),
+            "volume_period": 20,
+        }
+    if strategy == "自訂條件":
+        st.caption("第一階段視覺化條件器支援同一群組內AND／OR；指標可用收盤價、MA5、MA20、MA60、RSI、成交量倍數及漲跌幅。")
+        indicators = ("close", "MA5", "MA20", "MA60", "RSI", "成交量倍數", "漲跌幅")
+        operators = ("大於", "小於", "大於等於", "小於等於", "向上突破", "向下跌破")
+        entry_connector = st.radio("買進條件連接", ("AND", "OR"), horizontal=True)
+        e1, e2, e3 = st.columns(3)
+        entry = [{"left": e1.selectbox("買進指標", indicators), "operator": e2.selectbox("買進比較", operators), "value": e3.number_input("買進比較值", value=0.0)}]
+        exit_connector = st.radio("賣出條件連接", ("OR", "AND"), horizontal=True)
+        x1, x2, x3 = st.columns(3)
+        exit_conditions = [{"left": x1.selectbox("賣出指標", indicators), "operator": x2.selectbox("賣出比較", operators), "value": x3.number_input("賣出比較值", value=0.0)}]
+        return {"entry_conditions": entry, "exit_conditions": exit_conditions, "entry_connector": entry_connector, "exit_connector": exit_connector}
     st.info("回測第一個可成交交易日買進，持有至期間結束。")
     return {}
 
 
 @st.cache_data(show_spinner=False)
-def _cached_run(frame: pd.DataFrame, strategy: str, parameters: dict, config: BacktestConfig) -> BacktestResult:
-    return run_backtest(frame, strategy, parameters, config)
+def _cached_run(frame: pd.DataFrame, strategy: str, parameters: dict, config: BacktestConfig, dividends: pd.DataFrame) -> BacktestResult:
+    return run_backtest(frame, strategy, parameters, config, dividends)
 
 
 def _render_results(result: BacktestResult, benchmark: BacktestResult, frame: pd.DataFrame, context: dict) -> None:
@@ -210,13 +259,134 @@ def _render_trades(result: BacktestResult) -> None:
     st.dataframe(display, hide_index=True, width="stretch")
 
 
-def _render_exports(result: BacktestResult, context: dict) -> None:
+def _render_period_performance(result: BacktestResult) -> None:
+    st.subheader("月度與年度績效")
+    monthly = monthly_returns(result.equity)
+    st.dataframe(
+        monthly.style.format({"報酬率": "{:+.2%}"}),
+        hide_index=True, width="stretch",
+    )
+    equity = result.equity.copy()
+    equity["年度"] = pd.to_datetime(equity["date"]).dt.year
+    annual = equity.groupby("年度").agg(
+        年初資產=("total_equity", "first"), 年末資產=("total_equity", "last"),
+        年度最大回撤=("drawdown", "min"), 股息收入=("dividend_income", "sum"),
+    ).reset_index()
+    annual["年度報酬率"] = annual["年末資產"] / annual["年初資產"] - 1
+    st.dataframe(
+        annual.style.format({
+            "年初資產": "NT$ {:,.0f}", "年末資產": "NT$ {:,.0f}",
+            "年度最大回撤": "{:.2%}", "年度報酬率": "{:+.2%}", "股息收入": "NT$ {:,.0f}",
+        }),
+        hide_index=True, width="stretch",
+    )
+    heat = go.Figure(go.Bar(
+        x=monthly["月份"], y=monthly["報酬率"] * 100,
+        marker_color=[COLORS["candlestick"]["up"] if value >= 0 else COLORS["candlestick"]["down"] for value in monthly["報酬率"]],
+        name="月報酬率",
+    ))
+    _layout(heat, "月度報酬（紅色正報酬／綠色負報酬）", "報酬率（%）")
+    st.plotly_chart(heat, width="stretch", config={"displaylogo": False, "scrollZoom": False})
+
+
+def _render_comparison(frame: pd.DataFrame, config: BacktestConfig) -> None:
+    st.subheader("多策略比較")
+    choices = st.multiselect("選擇最多5個策略", STRATEGIES[:-1], default=["買進持有", "均線交叉", "RSI反轉", "MACD交叉"], max_selections=5)
+    if not st.button("執行多策略比較", use_container_width=True):
+        return
+    rows, curves = [], []
+    defaults = {
+        "均線交叉": {"short_ma": 5, "long_ma": 20},
+        "RSI反轉": {"rsi_period": 14, "oversold": 30, "overbought": 70},
+        "MACD交叉": {"macd_fast": 12, "macd_slow": 26, "macd_signal": 9},
+        "KD交叉": {"kd_period": 9, "kd_low": 20, "kd_high": 80},
+        "布林均值回歸": {"bollinger_period": 20, "bollinger_std": 2},
+        "布林突破": {"bollinger_period": 20, "bollinger_std": 2, "volume_multiple": 1.5},
+        "成交量突破": {"breakout_high": 20, "breakout_low": 10, "volume_period": 20, "volume_multiple": 1.5},
+    }
+    for name in choices:
+        result = run_backtest(frame, name, defaults.get(name, {}), config)
+        rows.append({"策略名稱": name, **result.metrics})
+        curves.append((name, result.equity))
+    comparison = pd.DataFrame(rows)
+    st.dataframe(comparison[["策略名稱", "total_return", "annualized_return", "max_drawdown", "sharpe_ratio", "win_rate", "profit_factor", "completed_trades", "final_equity", "total_transaction_costs"]], hide_index=True, width="stretch")
+    fig = go.Figure()
+    palette = [COLORS["backtest"]["strategy"], COLORS["backtest"]["benchmark"], COLORS["backtest"]["cash"], COLORS["dmi"]["adx"], COLORS["dividend"]["shares"]]
+    for index, (name, equity) in enumerate(curves):
+        fig.add_scatter(x=equity["date"], y=equity["total_equity"], name=name, line={"color": palette[index], "width": 2})
+    _layout(fig, "多策略資產曲線", "資產（NT$）")
+    st.plotly_chart(fig, width="stretch", config={"displaylogo": False, "scrollZoom": False})
+
+
+def _render_optimizer(frame: pd.DataFrame, strategy: str, parameters: dict, config: BacktestConfig) -> None:
+    st.subheader("參數最佳化與樣本外驗證")
+    st.warning("歷史最佳參數可能存在過度擬合，不代表未來市場中仍能維持相同績效。")
+    a, b, c = st.columns(3)
+    short_start, short_end, short_step = a.number_input("短均線起始", 2, 50, 5), b.number_input("短均線結束", 3, 60, 20), c.number_input("短均線間隔", 1, 20, 5)
+    a, b, c = st.columns(3)
+    long_start, long_end, long_step = a.number_input("長均線起始", 5, 120, 20), b.number_input("長均線結束", 10, 240, 120), c.number_input("長均線間隔", 1, 40, 20)
+    objective = st.selectbox("最佳化目標", ("年化報酬率最高", "Sharpe Ratio最高", "Sortino Ratio最高", "最大回撤最低", "Calmar Ratio最高", "Profit Factor最高"))
+    if st.button("執行參數最佳化", use_container_width=True):
+        try:
+            optimized = optimize_ma(frame, config, list(range(short_start, short_end + 1, short_step)), list(range(long_start, long_end + 1, long_step)), objective)
+            st.session_state["optimization_result"] = optimized
+        except ValueError as exc:
+            st.error(str(exc))
+    optimized = st.session_state.get("optimization_result")
+    if isinstance(optimized, pd.DataFrame) and not optimized.empty:
+        st.success(f"最佳參數：短期{int(optimized.iloc[0]['短期均線'])}日／長期{int(optimized.iloc[0]['長期均線'])}日")
+        st.dataframe(optimized.head(10), hide_index=True, width="stretch")
+        st.download_button("匯出參數最佳化CSV", optimized.to_csv(index=False).encode("utf-8-sig"), "optimization.csv", "text/csv")
+    if st.button("執行70/30驗證與Walk-forward", use_container_width=True):
+        analysis = training_validation_analysis(frame, strategy, parameters, config)
+        st.session_state["validation_analysis"] = analysis
+        st.session_state["walk_forward"] = walk_forward_analysis(frame, strategy, parameters, config)
+    analysis = st.session_state.get("validation_analysis")
+    if isinstance(analysis, dict):
+        comparison = pd.DataFrame([
+            {"期間": "訓練期70%", **analysis["training"]},
+            {"期間": "驗證期30%", **analysis["validation"]},
+        ])
+        st.dataframe(comparison[["期間", "total_return", "annualized_return", "max_drawdown", "sharpe_ratio", "profit_factor"]], hide_index=True, width="stretch")
+        if analysis["overfit_risk"]:
+            st.warning("此策略的驗證期表現明顯低於訓練期，可能存在過度擬合風險。")
+        st.dataframe(st.session_state["walk_forward"], hide_index=True, width="stretch")
+    st.info("AI策略：目前缺少逐日保存的歷史AI預測訊號，因此不使用最新預測回填過去；待歷史訊號累積後才會啟用。")
+
+
+def _render_exports(result: BacktestResult, context: dict, parameters: dict, config: BacktestConfig) -> None:
     st.download_button("匯出交易紀錄CSV", result.trades.to_csv(index=False).encode("utf-8-sig"), "backtest_trades.csv", "text/csv")
     st.download_button("匯出每日資產曲線CSV", result.equity.to_csv(index=False).encode("utf-8-sig"), "backtest_equity.csv", "text/csv")
     monthly = monthly_returns(result.equity)
     st.download_button("匯出月度績效CSV", monthly.to_csv(index=False).encode("utf-8-sig"), "backtest_monthly.csv", "text/csv")
-    setting = json.dumps({"股票": context["symbol"], "策略": context["strategy"]}, ensure_ascii=False, indent=2)
+    strategy_record = {"name": f"{context['symbol']}-{context['strategy']}", "symbol": context["symbol"], "strategy": context["strategy"], "parameters": parameters, "config": asdict(config)}
+    setting = json.dumps(strategy_record, ensure_ascii=False, indent=2)
     st.download_button("匯出策略設定JSON", setting, "backtest_strategy.json", "application/json")
+    storage_path = PROJECT_ROOT / "data" / "processed" / "saved_strategies.json"
+    strategy_name = st.text_input("策略名稱", value=strategy_record["name"])
+    if st.button("儲存策略設定"):
+        save_strategy(storage_path, {**strategy_record, "name": strategy_name})
+        st.success("策略已儲存；Streamlit雲端重新部署時本機儲存可能重置，請同時下載JSON備份。")
+    saved = load_strategies(storage_path)
+    if saved:
+        names = [item.get("name", "未命名") for item in saved]
+        selected = st.selectbox("已儲存策略", names)
+        confirm = st.checkbox("我確認要刪除此策略")
+        if st.button("刪除所選策略", disabled=not confirm):
+            delete_strategy(storage_path, selected)
+            st.success("策略已刪除")
+
+
+def _load_dividends(symbol: str) -> pd.DataFrame:
+    path = PROJECT_ROOT / "data" / "processed" / "dividends" / f"{symbol.removesuffix('.TW')}.csv"
+    if not path.exists():
+        st.warning("目前沒有此標的真實股息公告資料，股息回測將不計入股息。")
+        return pd.DataFrame()
+    try:
+        return pd.read_csv(path)
+    except (OSError, ValueError):
+        st.warning("股息公告資料格式異常，股息回測將不計入股息。")
+        return pd.DataFrame()
 
 
 def _layout(fig: go.Figure, title: str, y_title: str) -> None:

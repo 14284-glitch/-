@@ -9,8 +9,14 @@ from backtest.backtester import (
     run_backtest,
     transaction_cost,
 )
+from backtest.optimizer import (
+    optimize_ma,
+    training_validation_analysis,
+    walk_forward_analysis,
+)
 from backtest.performance import calculate_metrics
-from backtest.strategy import generate_signals
+from backtest.storage import delete_strategy, load_strategies, save_strategy
+from backtest.strategy import evaluate_condition, generate_signals
 
 
 def market_frame(rows=160, pattern="trend"):
@@ -101,3 +107,75 @@ def test_invalid_parameters_are_rejected_in_traditional_chinese():
         generate_signals(market_frame(), "均線交叉", {"short_ma": 20, "long_ma": 5})
     with pytest.raises(ValueError, match="初始本金"):
         run_backtest(market_frame(), "買進持有", {}, BacktestConfig("x", initial_capital=0))
+
+
+@pytest.mark.parametrize(
+    ("strategy", "parameters"),
+    [
+        ("KD交叉", {"kd_period": 9, "kd_low": 40, "kd_high": 60}),
+        ("布林均值回歸", {"bollinger_period": 20, "bollinger_std": 1.5}),
+        ("布林突破", {"bollinger_period": 20, "bollinger_std": 1.0, "volume_multiple": 1.0}),
+        ("成交量突破", {"breakout_high": 10, "breakout_low": 5, "volume_period": 10, "volume_multiple": 1.0}),
+    ],
+)
+def test_second_stage_strategies_produce_boolean_signals(strategy, parameters):
+    result = generate_signals(market_frame(pattern="wave"), strategy, parameters)
+    assert result["entry_signal"].dtype == bool
+    assert result["exit_signal"].dtype == bool
+    assert len(result) == 160
+
+
+def test_custom_condition_and_or_and_cross_operators():
+    left = pd.Series([1, 2, 4, 2])
+    assert evaluate_condition(left, "向上突破", 3).tolist() == [False, False, True, False]
+    data = market_frame(pattern="wave")
+    parameters = {
+        "entry_conditions": [
+            {"left": "RSI", "operator": "小於", "value": 55},
+            {"left": "成交量倍數", "operator": "大於", "value": 0.9},
+        ],
+        "exit_conditions": [{"left": "RSI", "operator": "大於", "value": 60}],
+        "entry_connector": "AND", "exit_connector": "OR",
+    }
+    result = generate_signals(data, "自訂條件", parameters)
+    assert result["entry_signal"].any()
+
+
+def test_ai_strategy_refuses_latest_only_prediction_data():
+    with pytest.raises(ValueError, match="缺少歷史AI預測訊號"):
+        generate_signals(market_frame(), "AI歷史訊號", {})
+
+
+def test_cash_dividend_and_reinvestment_use_real_event_date():
+    data = market_frame(50)
+    payment_date = data.iloc[10]["trade_date"]
+    dividends = pd.DataFrame({"cash_payment_date": [payment_date], "cash_dividend": [2.0]})
+    config = BacktestConfig("x", allow_odd_lots=True, include_dividends=True)
+    result = run_backtest(data, "買進持有", {}, config, dividends)
+    assert result.metrics["total_dividends"] > 0
+    assert result.equity.loc[result.equity["date"] == payment_date, "dividend_income"].iloc[0] > 0
+    reinvest = run_backtest(data, "買進持有", {}, BacktestConfig("x", allow_odd_lots=True, include_dividends=True, reinvest_dividends=True), dividends)
+    assert reinvest.metrics["total_dividends"] > 0
+
+
+def test_optimizer_limits_combinations_and_returns_ranked_results():
+    data = market_frame(pattern="wave")
+    config = BacktestConfig("x", allow_odd_lots=True)
+    optimized = optimize_ma(data, config, [5, 10], [20, 30], "Sharpe Ratio最高")
+    assert len(optimized) == 4
+    assert optimized.iloc[0]["排名"] == 1
+    with pytest.raises(ValueError, match="超過上限"):
+        optimize_ma(data, config, list(range(2, 30)), list(range(31, 80)), "Sharpe Ratio最高", max_combinations=10)
+
+
+def test_training_validation_walk_forward_and_storage(tmp_path):
+    data = market_frame(240, pattern="wave")
+    config = BacktestConfig("x", allow_odd_lots=True)
+    analysis = training_validation_analysis(data, "均線交叉", {"short_ma": 5, "long_ma": 20}, config)
+    assert {"training", "validation", "overfit_risk"} <= analysis.keys()
+    walk = walk_forward_analysis(data, "均線交叉", {"short_ma": 5, "long_ma": 20}, config)
+    assert len(walk) == 3
+    path = tmp_path / "strategies.json"
+    save_strategy(path, {"name": "測試策略", "strategy": "均線交叉"})
+    assert load_strategies(path)[0]["name"] == "測試策略"
+    assert delete_strategy(path, "測試策略") == []
