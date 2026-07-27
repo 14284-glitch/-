@@ -102,6 +102,19 @@ def render() -> None:
         _render_optimizer(frame, strategy, parameters, st.session_state["backtest_config"])
     with export_tab:
         _render_exports(result, context, parameters, st.session_state["backtest_config"])
+        st.divider()
+        st.subheader("刪除回測紀錄")
+        st.caption("只清除目前瀏覽器工作階段的回測結果，不會刪除股票行情、股息資料或已匯出的檔案。")
+        confirm_delete = st.checkbox("我確認要刪除目前的策略回測紀錄", key="confirm_delete_backtest")
+        if st.button(
+            "刪除本次回測紀錄",
+            type="secondary",
+            disabled=not confirm_delete,
+            use_container_width=True,
+        ):
+            _clear_backtest_session()
+            st.success("策略回測紀錄已刪除。")
+            st.rerun()
 
 
 def _stock_and_range() -> tuple[pd.DataFrame | None, str, str]:
@@ -387,6 +400,22 @@ def _load_dividends(symbol: str) -> pd.DataFrame:
     except (OSError, ValueError):
         st.warning("股息公告資料格式異常，股息回測將不計入股息。")
         return pd.DataFrame()
+
+
+def _clear_backtest_session() -> None:
+    keys = (
+        "backtest_result",
+        "backtest_benchmark",
+        "backtest_context",
+        "backtest_parameters",
+        "backtest_config",
+        "optimization_result",
+        "validation_analysis",
+        "walk_forward",
+        "confirm_delete_backtest",
+    )
+    for key in keys:
+        st.session_state.pop(key, None)
 
 
 def _layout(fig: go.Figure, title: str, y_title: str) -> None:

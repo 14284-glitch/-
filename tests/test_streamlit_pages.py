@@ -72,3 +72,19 @@ def test_backtest_page_executes_and_exposes_results_and_exports():
     assert {"最終資產", "總報酬率", "最大回撤", "勝率", "Profit Factor"} <= set(metrics)
     downloads = {button.label for button in app.get("download_button")}
     assert {"匯出交易紀錄CSV", "匯出每日資產曲線CSV"} <= downloads
+    delete_buttons = [button for button in app.button if button.label == "刪除本次回測紀錄"]
+    assert len(delete_buttons) == 1
+    assert delete_buttons[0].disabled
+    confirmations = [
+        checkbox for checkbox in app.checkbox
+        if checkbox.label == "我確認要刪除目前的策略回測紀錄"
+    ]
+    assert len(confirmations) == 1
+    confirmations[0].set_value(True)
+    app.run(timeout=60)
+    delete_buttons = [button for button in app.button if button.label == "刪除本次回測紀錄"]
+    assert not delete_buttons[0].disabled
+    delete_buttons[0].click()
+    app.run(timeout=60)
+    assert not app.exception
+    assert "backtest_result" not in app.session_state
