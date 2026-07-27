@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-07-27T18:58:17.304041+08:00",
-  "finished_at": "2026-07-27T19:03:14.144858+08:00",
+  "started_at": "2026-07-27T20:28:12.284388+08:00",
+  "finished_at": "2026-07-27T20:33:58.911831+08:00",
   "trigger": "github",
   "status": "warning",
   "host": "runnervmvrwv9",
@@ -33,17 +33,17 @@
     {
       "name": "更新最近一次基本面與估值",
       "status": "warning",
-      "message": "成功更新 50 項；23 個標的暫無新資料，已保留最近成功資料"
+      "message": "成功更新 27 項；46 個標的暫無新資料，已保留最近成功資料"
     },
     {
       "name": "更新最新股利公告與發放日",
-      "status": "success",
-      "message": "成功 73 項，失敗 0 項"
+      "status": "warning",
+      "message": "成功更新 2 項；71 個標的暫無新資料，已保留最近成功資料"
     },
     {
       "name": "更新FRED與ALFRED總體資料",
-      "status": "warning",
-      "message": "成功更新 11 項；1 個標的暫無新資料，已保留最近成功資料"
+      "status": "success",
+      "message": "成功 12 項，失敗 0 項"
     },
     {
       "name": "同步後台歷史資料庫",
