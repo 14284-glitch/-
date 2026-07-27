@@ -38,3 +38,21 @@ def test_dividend_calculator_inputs_update_real_results():
     assert metrics["預估實領股息"] == "NT$ 900.00"
     assert metrics["成本殖利率"] == "5.00%"
     assert metrics["目前殖利率"] == "4.00%"
+
+
+def test_standalone_dividend_page_is_in_sidebar_and_interactive():
+    app = AppTest.from_file(str(Path(__file__).parents[1] / "app.py"), default_timeout=30).run()
+    options = app.sidebar.radio[0].options
+    assert "股息分析" in options
+
+    app.sidebar.radio[0].set_value("股息分析")
+    app.run(timeout=30)
+    assert not app.exception
+    assert any(header.value == "股息分析與試算" for header in app.header)
+
+    inputs = {widget.label: widget for widget in app.number_input}
+    inputs["持有股數"].set_value(125.0)
+    inputs["每股現金股利"].set_value(3.0)
+    app.run(timeout=30)
+    metrics = {metric.label: metric.value for metric in app.metric}
+    assert metrics["預估現金股息"] == "NT$ 375.00"

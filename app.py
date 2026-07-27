@@ -10,7 +10,14 @@ import streamlit as st
 
 from config.color_config import COLORS
 from config.settings import PROJECT_ROOT, get_settings
-from pages import backtest_dashboard, financial_news, market_overview, prediction_dashboard, stock_analysis
+from pages import (
+    backtest_dashboard,
+    dividend_dashboard,
+    financial_news,
+    market_overview,
+    prediction_dashboard,
+    stock_analysis,
+)
 
 
 def _read_update_status_safely() -> dict:
@@ -210,12 +217,13 @@ def main() -> None:
     st.sidebar.caption("請選擇要查看的功能頁面")
     page = st.sidebar.radio(
         "功能選單",
-        ("財經新聞", "市場總覽", "個股分析", "模型預測", "策略回測", "系統狀態"),
-        help="切換財經新聞首頁、市場行情、個股技術分析、模型預測、策略回測或系統更新狀態。",
+        ("財經新聞", "市場總覽", "個股分析", "股息分析", "模型預測", "策略回測", "系統狀態"),
+        help="切換財經新聞、市場行情、個股技術分析、股息分析與試算、模型預測、策略回測或系統更新狀態。",
     )
     renderers = {
         "財經新聞": financial_news.render, "市場總覽": market_overview.render,
         "個股分析": stock_analysis.render,
+        "股息分析": dividend_dashboard.render,
         "模型預測": prediction_dashboard.render, "策略回測": backtest_dashboard.render,
         "系統狀態": render_system_status,
     }
@@ -224,6 +232,7 @@ def main() -> None:
         "財經新聞": "瀏覽最新財經新聞，可使用固定的分類與新聞來源選單篩選。",
         "市場總覽": "比較台股與主要美國市場的相對走勢。",
         "個股分析": "查看K線、均線、成交量與技術指標。",
+        "股息分析": "查看最新與歷年股息、填息狀態，並使用可操作的股息試算機。",
         "模型預測": "查看已驗證模型產生的預測與不確定區間。",
         "策略回測": "檢查策略的歷史績效與風險。",
         "系統狀態": "查看資料更新時間、執行結果及手動更新功能。",
@@ -232,7 +241,7 @@ def main() -> None:
     st.sidebar.divider()
     st.sidebar.caption(f"目前台北時間：{datetime.now(ZoneInfo('Asia/Taipei')):%Y-%m-%d %H:%M:%S}")
     st.sidebar.caption("本系統僅供研究，不構成投資建議。")
-    st.sidebar.caption("介面版本：2026.07.26-45（完整股息試算版）")
+    st.sidebar.caption("介面版本：2026.07.27-46（獨立股息分析頁）")
 
 
 if __name__ == "__main__":
