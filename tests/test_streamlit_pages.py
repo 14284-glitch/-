@@ -56,3 +56,19 @@ def test_standalone_dividend_page_is_in_sidebar_and_interactive():
     app.run(timeout=30)
     metrics = {metric.label: metric.value for metric in app.metric}
     assert metrics["預估現金股息"] == "NT$ 375.00"
+
+
+def test_backtest_page_executes_and_exposes_results_and_exports():
+    app = AppTest.from_file(str(Path(__file__).parents[1] / "app.py"), default_timeout=60).run()
+    app.sidebar.radio[0].set_value("策略回測")
+    app.run(timeout=60)
+    assert not app.exception
+    run_buttons = [button for button in app.button if button.label == "執行回測"]
+    assert len(run_buttons) == 1
+    run_buttons[0].click()
+    app.run(timeout=60)
+    assert not app.exception
+    metrics = {metric.label: metric.value for metric in app.metric}
+    assert {"最終資產", "總報酬率", "最大回撤", "勝率", "Profit Factor"} <= set(metrics)
+    downloads = {button.label for button in app.get("download_button")}
+    assert {"匯出交易紀錄CSV", "匯出每日資產曲線CSV"} <= downloads
