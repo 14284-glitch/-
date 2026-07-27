@@ -1,9 +1,9 @@
 """Streamlit web entry point for the Taiwan stock prediction platform."""
 
-from datetime import datetime
 import json
 import os
 import sqlite3
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import streamlit as st
@@ -11,12 +11,12 @@ import streamlit as st
 from config.color_config import COLORS
 from config.settings import PROJECT_ROOT, get_settings
 from pages import (
-    backtest_dashboard,
     dividend_dashboard,
     financial_news,
     market_overview,
     prediction_dashboard,
     stock_analysis,
+    strategy_backtest_dashboard,
 )
 
 
@@ -224,7 +224,7 @@ def main() -> None:
         "財經新聞": financial_news.render, "市場總覽": market_overview.render,
         "個股分析": stock_analysis.render,
         "股息分析": dividend_dashboard.render,
-        "模型預測": prediction_dashboard.render, "策略回測": backtest_dashboard.render,
+        "模型預測": prediction_dashboard.render, "策略回測": strategy_backtest_dashboard.render,
         "系統狀態": render_system_status,
     }
     renderers[page]()
@@ -241,7 +241,7 @@ def main() -> None:
     st.sidebar.divider()
     st.sidebar.caption(f"目前台北時間：{datetime.now(ZoneInfo('Asia/Taipei')):%Y-%m-%d %H:%M:%S}")
     st.sidebar.caption("本系統僅供研究，不構成投資建議。")
-    st.sidebar.caption("介面版本：2026.07.27-50（策略回測第二三階段）")
+    st.sidebar.caption("介面版本：2026.07.27-51（回測模組強制更新版）")
 
 
 if __name__ == "__main__":

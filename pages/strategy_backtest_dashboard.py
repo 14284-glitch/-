@@ -1,4 +1,4 @@
-"""Interactive first-stage strategy backtest dashboard."""
+"""Interactive multi-stage strategy backtest dashboard."""
 
 from __future__ import annotations
 
