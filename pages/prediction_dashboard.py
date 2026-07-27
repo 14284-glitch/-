@@ -143,11 +143,21 @@ def _render_research_forecast(symbol: str) -> None:
     cards = st.columns(3)
     for column, forecast in zip(cards, result["forecasts"]):
         with column:
-            st.markdown(f"#### 未來{forecast.horizon}日")
+            direction, direction_note = _direction_hint(
+                forecast.probability_up,
+                forecast.probability_down,
+                forecast.probability_sideways,
+                forecast.expected_return,
+            )
+            st.markdown(f"#### 未來{forecast.horizon}日｜{direction}")
             st.write(
                 f"上漲 {forecast.probability_up:.1%}｜"
                 f"盤整 {forecast.probability_sideways:.1%}｜"
                 f"下跌 {forecast.probability_down:.1%}"
+            )
+            st.caption(
+                f"{direction_note}；依目前已接入的價格量能、技術面、大盤與國際市場、"
+                "法人籌碼、基本面、總體經濟及新聞事件資料整合估計。"
             )
             st.metric("預期報酬", f"{forecast.expected_return:+.2%}")
             st.write(
@@ -189,6 +199,31 @@ def _render_research_forecast(symbol: str) -> None:
         "AI預測是依歷史資料、技術指標、財務資料及模型計算所得，僅供研究及投資參考，"
         "不保證未來價格走勢，亦不構成買進、賣出或持有建議。"
     )
+
+
+def _direction_hint(
+    probability_up: float,
+    probability_down: float,
+    probability_sideways: float,
+    expected_return: float,
+) -> tuple[str, str]:
+    """Return a plain-language hint from the horizon model's three probabilities."""
+    probabilities = {
+        "可能上漲": float(probability_up),
+        "可能下跌": float(probability_down),
+        "可能盤整": float(probability_sideways),
+    }
+    highest = max(probabilities.values())
+    leaders = [label for label, probability in probabilities.items() if abs(probability - highest) < 1e-12]
+    if len(leaders) == 1:
+        direction = leaders[0]
+    elif expected_return > 0:
+        direction = "可能上漲"
+    elif expected_return < 0:
+        direction = "可能下跌"
+    else:
+        direction = "可能盤整"
+    return direction, f"三種情境中「{direction.removeprefix('可能')}」機率相對最高（{highest:.1%}）"
 
 
 @st.cache_data(ttl=600, show_spinner=False)

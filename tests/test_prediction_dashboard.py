@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 from models.research_forecaster import attach_external_market_features, forecast_from_price_history
-from pages.prediction_dashboard import load_prediction_data
+from pages.prediction_dashboard import _direction_hint, load_prediction_data
 from config.universe import TAIWAN_50_CONSTITUENTS, load_popular_etfs
 
 
@@ -27,6 +27,23 @@ def test_invalid_prediction_date_is_rejected(tmp_path: Path):
 def test_prediction_universes_have_fifty_items():
     assert len(TAIWAN_50_CONSTITUENTS) == 50
     assert len(load_popular_etfs()) == 50
+
+
+@pytest.mark.parametrize(
+    ("up", "down", "sideways", "expected_return", "expected"),
+    [
+        (0.60, 0.25, 0.15, 0.02, "可能上漲"),
+        (0.20, 0.65, 0.15, -0.03, "可能下跌"),
+        (0.25, 0.25, 0.50, 0.00, "可能盤整"),
+        (0.40, 0.40, 0.20, 0.01, "可能上漲"),
+    ],
+)
+def test_direction_hint_uses_each_horizon_probability(
+    up, down, sideways, expected_return, expected,
+):
+    direction, note = _direction_hint(up, down, sideways, expected_return)
+    assert direction == expected
+    assert "機率相對最高" in note
 
 
 def _write_forecast_history(path: Path, rows: int = 520) -> None:
