@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-08-09T16:10:23.443769+08:00",
-  "finished_at": "2026-08-09T16:13:20.028968+08:00",
+  "started_at": "2026-08-09T22:56:46.955166+08:00",
+  "finished_at": "2026-08-09T23:02:29.826923+08:00",
   "trigger": "github",
   "status": "warning",
   "host": "runnervmvrwv9",
@@ -12,8 +12,8 @@
     },
     {
       "name": "更新ETF熱門成交排行",
-      "status": "warning",
-      "message": "即時來源暫時無法連線，沿用最近成功資料：Expecting value: line 1 column 1 (char 0)"
+      "status": "success",
+      "message": "成功 50 項，失敗 0 項"
     },
     {
       "name": "更新台股行情",
