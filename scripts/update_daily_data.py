@@ -171,6 +171,7 @@ def _default_pipeline(raw_dir: Path) -> list[tuple[str, Callable[[], object]]]:
     from collectors.dividend_collector import collect_dividend_announcements
     from collectors.macro_collector import collect_macro_history
     from config.universe import load_tw_symbols
+    from scripts.update_predictions import update_validated_predictions
 
     settings = get_settings()
     stock_ids = sorted({
@@ -256,6 +257,7 @@ def _default_pipeline(raw_dir: Path) -> list[tuple[str, Callable[[], object]]]:
         )),
         ("更新FRED與ALFRED總體資料", cached(macro_update, raw_dir / "macro")),
         ("同步後台歷史資料庫", lambda: SQLiteRepository().sync_project_data(raw_dir, PROJECT_ROOT / "data" / "processed" / "financial_news.json")),
+        ("核對舊預測並產生分週期Logistic預測", lambda: update_validated_predictions(raw_dir / "tw")),
         ("同步BigQuery雲端資料庫", cached(
             bigquery_update, PROJECT_ROOT / "data" / "stock_predictor.db"
         )),

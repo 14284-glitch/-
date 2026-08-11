@@ -13,6 +13,7 @@ from config.settings import PROJECT_ROOT
 from config.universe import TAIWAN_50_CONSTITUENTS, load_popular_etfs
 from database.sqlite_repository import SQLiteRepository
 from models.research_forecaster import forecast_from_price_history
+from models.prediction_ledger import LATEST_PATH, LEDGER_PATH, monitoring_summary
 from pages.chart_factory import prediction_chart
 from pages.glossary import prediction_legend_items, render_chart_with_legend, render_glossary
 from pages.stock_analysis import _sort_stocks_by_popularity
@@ -97,9 +98,70 @@ def render() -> None:
         filter_mode=None,
     )
     selected_symbol = labels[selected_label]
+    _render_validated_forecast(selected_symbol)
     _render_research_forecast(selected_symbol)
     with st.expander("Logistic Regression與XGBoost開發狀態"):
-        st.info("⏳ 正在訓練與進行時間序列驗證；完成未來資料防護與回測後才會顯示上漲機率。")
+        st.success("Logistic Regression基準模型已啟用：分週期訓練、機率校準、保留測試及Walk-forward驗證。")
+        st.info("XGBoost將作為挑戰者模型；只有樣本外績效穩定勝過Logistic基準後才會升級，不會直接覆蓋。")
+
+
+def _render_validated_forecast(symbol: str) -> None:
+    st.divider()
+    st.subheader("時間序列驗證模型｜Logistic Regression")
+    if not LATEST_PATH.exists():
+        st.info("尚未產生驗證模型檔案；下次每日更新會訓練模型並建立不可回寫的預測紀錄。")
+        return
+    latest = pd.read_csv(LATEST_PATH)
+    rows = latest[latest["symbol"] == symbol].sort_values("horizon")
+    if rows.empty:
+        st.warning("此標的尚未通過最低歷史樣本要求，目前保留歷史相似情境結果供研究。")
+        return
+    st.caption(
+        "三個週期分開訓練；測試績效來自時間後段保留資料，訓練與測試之間已依預測天數清除重疊標籤。"
+    )
+    cards = st.columns(3)
+    for column, (_, row) in zip(cards, rows.iterrows()):
+        with column:
+            direction, _ = _direction_hint(
+                row["probability_up"], row["probability_down"],
+                row["probability_sideways"], row["expected_return"],
+            )
+            st.markdown(
+                f"#### 未來{int(row['horizon'])}日｜"
+                f'<span style="color:{_direction_color(direction)};font-weight:800">{direction}</span>',
+                unsafe_allow_html=True,
+            )
+            st.write(
+                f"上漲 {row['probability_up']:.1%}｜盤整 {row['probability_sideways']:.1%}｜"
+                f"下跌 {row['probability_down']:.1%}"
+            )
+            st.metric("預期報酬", f"{row['expected_return']:+.2%}")
+            st.write(
+                f"預期價格：{row['expected_price']:,.2f}\n\n"
+                f"報酬區間：{row['return_lower']:+.2%}～{row['return_upper']:+.2%}\n\n"
+                f"目標交易日：{row['target_date']}"
+            )
+            st.caption(
+                f"保留測試命中率 {row['accuracy']:.1%}｜平衡命中率 {row['balanced_accuracy']:.1%}｜"
+                f"Walk-forward平衡命中率 {row.get('walk_forward_balanced_accuracy', 0):.1%}｜"
+                f"報酬MAE {row['return_mae']:.2%}｜樣本 {int(row['test_samples'])}筆"
+            )
+            ready = bool(row.get("production_ready", False))
+            if ready:
+                st.success(f"已通過目前上線門檻；多數類別基準 {row['baseline_accuracy']:.1%}")
+            else:
+                st.error(
+                    f"未通過上線門檻；多數類別基準 {row.get('baseline_accuracy', 0):.1%}。"
+                    "此數值只供模型研究，不應作為交易訊號。"
+                )
+    if LEDGER_PATH.exists():
+        summary = monitoring_summary(pd.read_csv(LEDGER_PATH))
+        if not summary.empty:
+            st.markdown("#### 上線後真實誤差監控")
+            st.dataframe(summary, hide_index=True, width="stretch")
+        else:
+            st.caption("預測紀錄已開始累積；需等1、5、20個交易日到期後才會出現真實命中率。")
+    st.warning("保留測試表現與未來實際表現可能不同；機率及價格僅供研究，不保證獲利。")
 
 
 def _render_research_forecast(symbol: str) -> None:

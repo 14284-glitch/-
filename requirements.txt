@@ -4,6 +4,7 @@ streamlit>=1.37,<2.0
 plotly>=5.23,<7.0
 pandas>=2.2,<3.0
 numpy>=1.26,<3.0
+scikit-learn>=1.4,<2.0
 requests>=2.32,<3.0
 yfinance>=0.2.40,<1.0
 exchange-calendars>=4.5,<5.0
