@@ -105,9 +105,8 @@ def _render_summary(
     first[3].metric("最新公告股票股利", f"NT$ {latest_stock:,.2f}")
     first[4].metric("預估現金殖利率", f"{latest_cash / latest_price:.2%}" if latest_price else "0.00%")
     second = st.columns(4)
-    frequency_year = payment_summary["reference_year"]
     second[0].metric(
-        f"配息頻率（{frequency_year}）" if frequency_year else "配息頻率",
+        "配息頻率（依近期紀錄）",
         f"{frequency_text}（{payment_summary['frequency_count']}次）"
         if payment_summary["frequency_count"] else frequency_text,
     )
@@ -124,11 +123,13 @@ def _render_summary(
     fourth[1].metric("近5年平均殖利率", f"{recent_five['現金殖利率'].mean():.2%}")
     fourth[2].metric("股利是否穩定成長", growth_stable)
     st.caption(
-        f"配息次數以{payment_summary['basis']}去除重複公告後計算；"
+        f"配息頻率以近期{payment_summary['basis']}間隔判斷並去除重複公告；"
         f"{payment_summary['current_year']}年目前已公告"
         f"{payment_summary['current_announced_count']}次、已實際發放"
-        f"{payment_summary['current_paid_count']}次。配息頻率採最近完整年度，"
-        "避免今年尚未結束而少算。"
+        f"{payment_summary['current_paid_count']}次。最近完整年度"
+        f"（{payment_summary['reference_year'] or '目前無資料'}）實際"
+        f"{payment_summary.get('completed_year_count', 0)}次；頻率與實際年度次數分開呈現，"
+        "避免資料回填不完整或今年尚未結束造成誤判。"
     )
     if "公告時間" in history and pd.notna(latest.get("公告時間")):
         st.caption(f"最近公告時間：{pd.to_datetime(latest['公告時間']):%Y-%m-%d %H:%M:%S}")

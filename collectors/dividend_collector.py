@@ -99,15 +99,34 @@ def _column(frame: pd.DataFrame, column: str) -> pd.Series:
 
 
 def _merge_cache(path: Path, incoming: pd.DataFrame) -> None:
-    existing = pd.read_csv(path) if path.exists() else pd.DataFrame(columns=OUTPUT_COLUMNS)
+    existing = (
+        pd.read_csv(path, dtype={"stock_id": "string"})
+        if path.exists() else pd.DataFrame(columns=OUTPUT_COLUMNS)
+    )
     frames = [frame for frame in (existing, incoming) if not frame.empty]
     combined = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=OUTPUT_COLUMNS)
     if combined.empty:
         combined = pd.DataFrame(columns=OUTPUT_COLUMNS)
     else:
+        combined["stock_id"] = (
+            combined["stock_id"].astype("string").str.replace(r"\.0$", "", regex=True)
+            .str.zfill(4)
+        )
+        event_keys = []
+        for column in (
+            "record_date", "cash_ex_dividend_date", "stock_ex_right_date", "cash_payment_date"
+        ):
+            if column in combined:
+                combined[column] = pd.to_datetime(combined[column], errors="coerce").dt.normalize()
+                event_keys.append(column)
+        combined["_event_identity"] = pd.NaT
+        for column in event_keys:
+            combined["_event_identity"] = combined["_event_identity"].fillna(combined[column])
+        if "updated_at" in combined:
+            combined = combined.sort_values("updated_at", na_position="first")
         combined = combined.drop_duplicates(
-            ["stock_id", "year", "record_date", "announcement_datetime"], keep="last"
-        ).sort_values(["announcement_datetime", "record_date"])
+            ["stock_id", "_event_identity"], keep="last"
+        ).drop(columns="_event_identity").sort_values(["announcement_datetime", "record_date"])
     temporary = path.with_suffix(".tmp")
     combined.to_csv(temporary, index=False)
     temporary.replace(path)

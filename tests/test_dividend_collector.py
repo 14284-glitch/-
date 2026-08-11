@@ -56,6 +56,16 @@ def test_collector_writes_incremental_cache(tmp_path: Path):
     assert (tmp_path / "2330.csv").exists()
 
 
+def test_repeated_collection_does_not_duplicate_same_dividend_event(tmp_path: Path):
+    for _ in range(2):
+        collect_dividend_announcements(
+            tmp_path, "token", ["0056"], start_date="2026-01-01", session=_Session()
+        )
+    cached = pd.read_csv(tmp_path / "0056.csv", dtype={"stock_id": "string"})
+    assert len(cached) == 1
+    assert cached.iloc[0]["stock_id"] == "0056"
+
+
 def test_announced_history_prefers_exact_payment_and_stock_dates():
     announcements = normalize_dividend_announcements([SAMPLE], "2330")
     prices = pd.DataFrame({

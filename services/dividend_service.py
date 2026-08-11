@@ -251,11 +251,28 @@ def summarize_cash_payment_frequency(
     reference_year = (
         int(completed["_event_date"].dt.year.max()) if not completed.empty else None
     )
-    frequency_count = (
+    completed_year_count = (
         int(completed.loc[
             completed["_event_date"].dt.year == reference_year, "_event_date"
         ].nunique()) if reference_year is not None else 0
     )
+    # Determine the recurring schedule from recent intervals. This remains accurate
+    # when the first event of a calendar year is absent from a partial API backfill,
+    # or when a newly listed ETF has not yet completed its first full year.
+    recent_dates = cash["_event_date"].sort_values().drop_duplicates().tail(8)
+    intervals = recent_dates.diff().dt.days.dropna()
+    typical_days = float(intervals.median()) if not intervals.empty else float("nan")
+    if pd.notna(typical_days):
+        if typical_days <= 45:
+            frequency_count = 12
+        elif typical_days <= 120:
+            frequency_count = 4
+        elif typical_days <= 220:
+            frequency_count = 2
+        else:
+            frequency_count = 1
+    else:
+        frequency_count = completed_year_count or 1
     labels = {1: "每年一次", 2: "每半年", 4: "每季", 12: "每月"}
     frequency_text = labels.get(
         frequency_count,
@@ -274,6 +291,7 @@ def summarize_cash_payment_frequency(
         "current_year": cutoff.year,
         "current_announced_count": int(current["_event_date"].nunique()),
         "current_paid_count": int(paid["_payment_date"].nunique()),
+        "completed_year_count": completed_year_count,
         "basis": "唯一現金股利發放日" if payment.notna().any() else "唯一除息日（發放日未提供）",
     }
 
@@ -289,12 +307,20 @@ def _deduplicate_announcements(announcements: pd.DataFrame) -> pd.DataFrame:
     for column in date_keys:
         # CSV updates may represent the same day as either YYYY-MM-DD or with 00:00:00.
         clean[column] = pd.to_datetime(clean[column], errors="coerce").dt.normalize()
-    keys = date_keys or (["year"] if "year" in clean.columns else [])
-    if not keys:
+    if not date_keys and "year" not in clean.columns:
         return clean
+    if date_keys:
+        clean["_event_identity"] = pd.NaT
+        for column in date_keys:
+            clean["_event_identity"] = clean["_event_identity"].fillna(clean[column])
+        keys = ["_event_identity"]
+    else:
+        keys = ["year"]
     if "updated_at" in clean:
         clean = clean.sort_values("updated_at", na_position="first")
-    return clean.drop_duplicates(subset=keys, keep="last").reset_index(drop=True)
+    return clean.drop_duplicates(subset=keys, keep="last").drop(
+        columns=["_event_identity"], errors="ignore"
+    ).reset_index(drop=True)
 
 
 def _dividend_year(text: str, fallback: int) -> int:

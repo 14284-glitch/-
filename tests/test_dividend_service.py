@@ -86,3 +86,21 @@ def test_stock_only_event_is_not_counted_as_cash_payment():
     result = summarize_cash_payment_frequency(history, as_of="2026-08-11")
     assert result["frequency_count"] == 0
     assert result["current_paid_count"] == 0
+
+
+def test_quarterly_schedule_survives_one_missing_calendar_event():
+    history = pd.DataFrame({
+        "每股現金股利": [1, 1, 1, 1, 1, 1],
+        "發放日期": [
+            "2024-11-12", "2025-05-14", "2025-08-08",
+            "2025-11-14", "2026-02-11", "2026-05-14",
+        ],
+        "除息日期": [
+            "2024-10-17", "2025-04-23", "2025-07-21",
+            "2025-10-23", "2026-01-22", "2026-04-23",
+        ],
+    })
+    result = summarize_cash_payment_frequency(history, as_of="2026-08-11")
+    assert result["completed_year_count"] == 3
+    assert result["frequency_count"] == 4
+    assert result["frequency_text"] == "每季"
