@@ -7,6 +7,7 @@ from services.dividend_service import (
     calculate_dividend,
     safe_number,
     simulate_reinvestment,
+    summarize_cash_payment_frequency,
 )
 
 
@@ -54,3 +55,34 @@ def test_dividend_history_uses_prior_close_and_observed_fill_date():
     assert result.iloc[0]["除息前參考價"] == 100
     assert result.iloc[0]["填息天數"] == 2
     assert result.iloc[0]["是否完成填息"] == "是"
+
+
+def test_payment_frequency_uses_unique_cash_payment_dates_and_completed_year():
+    history = pd.DataFrame({
+        "每股現金股利": [3, 3, 3, 3, 3, 3, 0],
+        "發放日期": [
+            "2025-01-10", "2025-04-10", "2025-07-10", "2025-10-10",
+            "2025-10-10", "2026-04-10", "2025-08-01",
+        ],
+        "除息日期": [
+            "2024-12-12", "2025-03-12", "2025-06-12", "2025-09-12",
+            "2025-09-12", "2026-03-12", "2025-07-01",
+        ],
+    })
+    result = summarize_cash_payment_frequency(history, as_of="2026-08-11")
+    assert result["reference_year"] == 2025
+    assert result["frequency_count"] == 4
+    assert result["frequency_text"] == "每季"
+    assert result["current_announced_count"] == 1
+    assert result["current_paid_count"] == 1
+
+
+def test_stock_only_event_is_not_counted_as_cash_payment():
+    history = pd.DataFrame({
+        "每股現金股利": [0],
+        "發放日期": ["2025-09-01"],
+        "除息日期": ["2025-08-01"],
+    })
+    result = summarize_cash_payment_frequency(history, as_of="2026-08-11")
+    assert result["frequency_count"] == 0
+    assert result["current_paid_count"] == 0

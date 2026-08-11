@@ -16,6 +16,7 @@ from services.dividend_service import (
     calculate_dividend,
     safe_number,
     simulate_reinvestment,
+    summarize_cash_payment_frequency,
 )
 from pages.glossary import LegendItem, render_chart_with_legend
 
@@ -86,8 +87,8 @@ def _render_summary(
     ).sort_values("年度")
     recent_five = annual.tail(5)
     latest = history.iloc[0]
-    frequency = int(history[history["年度"] == history["年度"].max()].shape[0])
-    frequency_text = {1: "每年一次", 2: "每半年", 4: "每季"}.get(frequency, f"每年約{frequency}次")
+    payment_summary = summarize_cash_payment_frequency(history)
+    frequency_text = str(payment_summary["frequency_text"])
     consecutive = _consecutive_years(set(annual["年度"].astype(int)))
     growth_stable = (
         "是" if len(recent_five) >= 3 and recent_five["每股現金股利"].pct_change().dropna().ge(0).all()
@@ -104,7 +105,12 @@ def _render_summary(
     first[3].metric("最新公告股票股利", f"NT$ {latest_stock:,.2f}")
     first[4].metric("預估現金殖利率", f"{latest_cash / latest_price:.2%}" if latest_price else "0.00%")
     second = st.columns(4)
-    second[0].metric("配息頻率", frequency_text)
+    frequency_year = payment_summary["reference_year"]
+    second[0].metric(
+        f"配息頻率（{frequency_year}）" if frequency_year else "配息頻率",
+        f"{frequency_text}（{payment_summary['frequency_count']}次）"
+        if payment_summary["frequency_count"] else frequency_text,
+    )
     second[1].metric("最近除息日", _date(latest["除息日期"]))
     second[2].metric("最後買進日", _last_buy_date(price_frame, latest["除息日期"]))
     second[3].metric("股息發放日", _date(latest["發放日期"]))
@@ -117,6 +123,13 @@ def _render_summary(
     fourth[0].metric("近5年平均現金股利", f"NT$ {recent_five['每股現金股利'].mean():,.2f}")
     fourth[1].metric("近5年平均殖利率", f"{recent_five['現金殖利率'].mean():.2%}")
     fourth[2].metric("股利是否穩定成長", growth_stable)
+    st.caption(
+        f"配息次數以{payment_summary['basis']}去除重複公告後計算；"
+        f"{payment_summary['current_year']}年目前已公告"
+        f"{payment_summary['current_announced_count']}次、已實際發放"
+        f"{payment_summary['current_paid_count']}次。配息頻率採最近完整年度，"
+        "避免今年尚未結束而少算。"
+    )
     if "公告時間" in history and pd.notna(latest.get("公告時間")):
         st.caption(f"最近公告時間：{pd.to_datetime(latest['公告時間']):%Y-%m-%d %H:%M:%S}")
 

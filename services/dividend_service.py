@@ -166,6 +166,7 @@ def build_announced_dividend_history(announcements: pd.DataFrame, prices: pd.Dat
     """Use announced FinMind dates and values, then observe fill-right from prices."""
     if announcements is None or announcements.empty:
         return pd.DataFrame()
+    announcements = _deduplicate_announcements(announcements)
     clean_prices = prices.copy()
     clean_prices["trade_date"] = pd.to_datetime(clean_prices["trade_date"], errors="coerce").dt.normalize()
     clean_prices["close"] = pd.to_numeric(clean_prices["close"], errors="coerce")
@@ -208,6 +209,92 @@ def build_announced_dividend_history(announcements: pd.DataFrame, prices: pd.Dat
     return pd.DataFrame(rows).sort_values(
         ["公告時間", "除息日期"], ascending=False, na_position="last"
     ).reset_index(drop=True)
+
+
+def summarize_cash_payment_frequency(
+    history: pd.DataFrame, as_of: object | None = None
+) -> dict[str, object]:
+    """Summarize unique cash-payment events without counting duplicate announcements.
+
+    Frequency is based on the latest completed calendar year, so a partially elapsed
+    current year cannot incorrectly turn a quarterly payer into a semiannual payer.
+    Only rows with a positive cash dividend are considered. Exact payment dates are
+    used for paid counts; ex-dividend dates are only a fallback for frequency when an
+    issuer has not supplied payment dates.
+    """
+    empty = {
+        "reference_year": None,
+        "frequency_count": 0,
+        "frequency_text": "目前無現金配息資料",
+        "current_year": pd.Timestamp(as_of or pd.Timestamp.now()).year,
+        "current_announced_count": 0,
+        "current_paid_count": 0,
+        "basis": "目前無資料",
+    }
+    if history is None or history.empty or "每股現金股利" not in history:
+        return empty
+
+    cutoff = pd.Timestamp(as_of or pd.Timestamp.now()).tz_localize(None).normalize()
+    cash = history[pd.to_numeric(history["每股現金股利"], errors="coerce").fillna(0) > 0].copy()
+    if cash.empty:
+        return empty
+    payment = pd.to_datetime(cash.get("發放日期"), errors="coerce").dt.normalize()
+    ex_date = pd.to_datetime(cash.get("除息日期"), errors="coerce").dt.normalize()
+    cash["_payment_date"] = payment
+    cash["_event_date"] = payment.fillna(ex_date)
+    cash = cash.dropna(subset=["_event_date"])
+    if cash.empty:
+        return empty
+
+    cash = cash.drop_duplicates(subset=["_event_date"])
+    completed = cash[cash["_event_date"].dt.year < cutoff.year]
+    reference_year = (
+        int(completed["_event_date"].dt.year.max()) if not completed.empty else None
+    )
+    frequency_count = (
+        int(completed.loc[
+            completed["_event_date"].dt.year == reference_year, "_event_date"
+        ].nunique()) if reference_year is not None else 0
+    )
+    labels = {1: "每年一次", 2: "每半年", 4: "每季", 12: "每月"}
+    frequency_text = labels.get(
+        frequency_count,
+        f"每年約{frequency_count}次" if frequency_count else "尚無完整年度資料",
+    )
+    current = cash[cash["_event_date"].dt.year == cutoff.year]
+    paid = cash[
+        cash["_payment_date"].notna()
+        & (cash["_payment_date"].dt.year == cutoff.year)
+        & (cash["_payment_date"] <= cutoff)
+    ]
+    return {
+        "reference_year": reference_year,
+        "frequency_count": frequency_count,
+        "frequency_text": frequency_text,
+        "current_year": cutoff.year,
+        "current_announced_count": int(current["_event_date"].nunique()),
+        "current_paid_count": int(paid["_payment_date"].nunique()),
+        "basis": "唯一現金股利發放日" if payment.notna().any() else "唯一除息日（發放日未提供）",
+    }
+
+
+def _deduplicate_announcements(announcements: pd.DataFrame) -> pd.DataFrame:
+    """Keep one row per economic dividend event across repeated daily downloads."""
+    clean = announcements.copy()
+    date_keys = [
+        column for column in (
+            "cash_ex_dividend_date", "stock_ex_right_date", "cash_payment_date", "record_date",
+        ) if column in clean.columns
+    ]
+    for column in date_keys:
+        # CSV updates may represent the same day as either YYYY-MM-DD or with 00:00:00.
+        clean[column] = pd.to_datetime(clean[column], errors="coerce").dt.normalize()
+    keys = date_keys or (["year"] if "year" in clean.columns else [])
+    if not keys:
+        return clean
+    if "updated_at" in clean:
+        clean = clean.sort_values("updated_at", na_position="first")
+    return clean.drop_duplicates(subset=keys, keep="last").reset_index(drop=True)
 
 
 def _dividend_year(text: str, fallback: int) -> int:
