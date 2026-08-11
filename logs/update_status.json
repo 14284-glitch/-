@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-08-11T17:38:29.980424+08:00",
-  "finished_at": "2026-08-11T17:45:16.511718+08:00",
+  "started_at": "2026-08-12T00:13:48.223873+08:00",
+  "finished_at": "2026-08-12T00:23:47.551439+08:00",
   "trigger": "github",
   "status": "warning",
   "host": "runnervmvrwv9",
@@ -28,17 +28,17 @@
     {
       "name": "更新法人與籌碼資料",
       "status": "success",
-      "message": "成功 77 項，失敗 0 項"
+      "message": "成功 75 項，失敗 0 項"
     },
     {
       "name": "更新最近一次基本面與估值",
       "status": "warning",
-      "message": "成功更新 50 項；27 個標的暫無新資料，已保留最近成功資料"
+      "message": "成功更新 50 項；25 個標的暫無新資料，已保留最近成功資料"
     },
     {
       "name": "更新最新股利公告與發放日",
       "status": "success",
-      "message": "成功 77 項，失敗 0 項"
+      "message": "成功 75 項，失敗 0 項"
     },
     {
       "name": "更新FRED與ALFRED總體資料",
@@ -49,6 +49,11 @@
       "name": "同步後台歷史資料庫",
       "status": "success",
       "message": "成功 0 項，失敗 0 項"
+    },
+    {
+      "name": "核對舊預測並產生分週期Logistic預測",
+      "status": "warning",
+      "message": "成功更新 0 項；132 個標的暫無新資料，已保留最近成功資料"
     },
     {
       "name": "同步BigQuery雲端資料庫",

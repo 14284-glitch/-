@@ -2,7 +2,7 @@
   "ranking_method": "latest_daily_traded_value",
   "source": "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?type=ALLBUT0999&response=json",
   "source_date": "115年08月11日 每日收盤行情(全部(不含權證、牛熊證、可展延牛熊證))",
-  "updated_at": "2026-08-11T17:38:39.745383+08:00",
+  "updated_at": "2026-08-12T00:14:00.821910+08:00",
   "items": [
     {
       "code": "0050",
