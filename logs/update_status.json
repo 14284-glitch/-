@@ -1,9 +1,9 @@
 {
-  "started_at": "2026-08-27T12:10:30.317457+08:00",
-  "finished_at": "2026-08-27T12:13:20.251432+08:00",
+  "started_at": "2026-08-28T01:33:54.919487+08:00",
+  "finished_at": "2026-08-28T01:36:59.273349+08:00",
   "trigger": "github",
   "status": "warning",
-  "host": "runnervm76f27",
+  "host": "runnervmgx7h7",
   "steps": [
     {
       "name": "更新財經新聞",
@@ -53,7 +53,7 @@
     {
       "name": "核對舊預測並產生分週期Logistic預測",
       "status": "warning",
-      "message": "成功更新 0 項；135 個標的暫無新資料，已保留最近成功資料"
+      "message": "成功更新 0 項；136 個標的暫無新資料，已保留最近成功資料"
     },
     {
       "name": "同步BigQuery雲端資料庫",
