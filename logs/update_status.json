@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-10-29T10:01:48.352258+08:00",
-  "finished_at": "2026-10-29T10:05:44.211876+08:00",
+  "started_at": "2026-10-29T20:46:39.764539+08:00",
+  "finished_at": "2026-10-29T20:49:44.198626+08:00",
   "trigger": "github",
   "status": "warning",
   "host": "runnervmnwato",
@@ -53,7 +53,7 @@
     {
       "name": "核對舊預測並產生分週期Logistic預測",
       "status": "warning",
-      "message": "成功更新 0 項；156 個標的暫無新資料，已保留最近成功資料"
+      "message": "成功更新 0 項；158 個標的暫無新資料，已保留最近成功資料"
     },
     {
       "name": "同步BigQuery雲端資料庫",
