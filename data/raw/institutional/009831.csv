@@ -1,0 +1,3 @@
+﻿stock_id,trade_date,dealer_net,foreign_net,investment_trust_net,institutional_net,margin_balance,short_balance,margin_change,short_change,securities_lending,updated_at
+009831,2026-10-28,,,,,0,0,,,,2026-10-30T02:49:26.953383+08:00
+009831,2026-10-29,-17100084.0,0.0,0.0,-17100084.0,345,0,345.0,0.0,,2026-10-30T02:49:26.953383+08:00
