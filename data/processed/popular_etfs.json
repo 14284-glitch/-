@@ -1,258 +1,258 @@
 {
   "ranking_method": "latest_daily_traded_value",
   "source": "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?type=ALLBUT0999&response=json",
-  "source_date": "115年11月05日 每日收盤行情(全部(不含權證、牛熊證、可展延牛熊證))",
-  "updated_at": "2026-11-05T22:29:09.937318+08:00",
+  "source_date": "115年11月06日 每日收盤行情(全部(不含權證、牛熊證、可展延牛熊證))",
+  "updated_at": "2026-11-07T20:49:37.749229+08:00",
   "items": [
     {
       "code": "0050",
       "name": "元大台灣50",
-      "traded_value": 47747693537
+      "traded_value": 85897249090
     },
     {
       "code": "00631L",
       "name": "元大台灣50正2",
-      "traded_value": 14824145124
-    },
-    {
-      "code": "00981A",
-      "name": "主動統一台股增長",
-      "traded_value": 12746476645
-    },
-    {
-      "code": "00406A",
-      "name": "主動中信台灣收益",
-      "traded_value": 9620158035
+      "traded_value": 34361700944
     },
     {
       "code": "00685L",
       "name": "群益臺灣加權正2",
-      "traded_value": 7711505048
+      "traded_value": 13225585626
+    },
+    {
+      "code": "00981A",
+      "name": "主動統一台股增長",
+      "traded_value": 11507043927
+    },
+    {
+      "code": "00406A",
+      "name": "主動中信台灣收益",
+      "traded_value": 9577754123
     },
     {
       "code": "0056",
       "name": "元大高股息",
-      "traded_value": 4643742406
+      "traded_value": 9339763740
     },
     {
       "code": "009816",
       "name": "凱基台灣TOP50",
-      "traded_value": 4327408945
+      "traded_value": 7883890514
     },
     {
       "code": "00878",
       "name": "國泰永續高股息",
-      "traded_value": 3921958148
-    },
-    {
-      "code": "00403A",
-      "name": "主動統一升級50",
-      "traded_value": 3378099907
-    },
-    {
-      "code": "00632R",
-      "name": "元大台灣50反1",
-      "traded_value": 2643296571
-    },
-    {
-      "code": "006208",
-      "name": "富邦台50",
-      "traded_value": 2363594096
-    },
-    {
-      "code": "00929",
-      "name": "復華台灣科技優息",
-      "traded_value": 2360974105
+      "traded_value": 6176409682
     },
     {
       "code": "00919",
       "name": "群益台灣精選高息",
-      "traded_value": 2338099914
+      "traded_value": 5501903617
     },
     {
-      "code": "00991A",
-      "name": "主動復華未來50",
-      "traded_value": 2275615722
+      "code": "00632R",
+      "name": "元大台灣50反1",
+      "traded_value": 5027798495
+    },
+    {
+      "code": "006208",
+      "name": "富邦台50",
+      "traded_value": 4402993780
     },
     {
       "code": "0052",
       "name": "富邦科技",
-      "traded_value": 1659400674
+      "traded_value": 3153994776
     },
     {
-      "code": "00891",
-      "name": "中信關鍵半導體",
-      "traded_value": 1644211471
+      "code": "00403A",
+      "name": "主動統一升級50",
+      "traded_value": 2958515117
     },
     {
-      "code": "00881",
-      "name": "國泰台灣科技龍頭",
-      "traded_value": 1627812608
-    },
-    {
-      "code": "00992A",
-      "name": "主動群益科技創新",
-      "traded_value": 1547868425
-    },
-    {
-      "code": "00927",
-      "name": "群益半導體收益",
-      "traded_value": 1523065418
-    },
-    {
-      "code": "00830",
-      "name": "國泰費城半導體",
-      "traded_value": 1294782243
-    },
-    {
-      "code": "00673R",
-      "name": "期元大S&P原油反1",
-      "traded_value": 1242922128
-    },
-    {
-      "code": "00935",
-      "name": "野村臺灣新科技50",
-      "traded_value": 1153071044
-    },
-    {
-      "code": "00982A",
-      "name": "主動群益台灣強棒",
-      "traded_value": 1131560755
+      "code": "00929",
+      "name": "復華台灣科技優息",
+      "traded_value": 2411915743
     },
     {
       "code": "00663L",
       "name": "國泰臺灣加權正2",
-      "traded_value": 1119799795
+      "traded_value": 2222771275
     },
     {
-      "code": "00400A",
-      "name": "主動國泰動能高息",
-      "traded_value": 1076317847
-    },
-    {
-      "code": "00918",
-      "name": "大華優利高填息30",
-      "traded_value": 1014085305
+      "code": "00830",
+      "name": "國泰費城半導體",
+      "traded_value": 2177780779
     },
     {
       "code": "00675L",
       "name": "富邦臺灣加權正2",
-      "traded_value": 891322294
+      "traded_value": 2120134638
     },
     {
-      "code": "00953B",
-      "name": "群益優選非投等債",
-      "traded_value": 799503776
+      "code": "00991A",
+      "name": "主動復華未來50",
+      "traded_value": 1916826317
+    },
+    {
+      "code": "00918",
+      "name": "大華優利高填息30",
+      "traded_value": 1913130626
+    },
+    {
+      "code": "00881",
+      "name": "國泰台灣科技龍頭",
+      "traded_value": 1872266541
+    },
+    {
+      "code": "00992A",
+      "name": "主動群益科技創新",
+      "traded_value": 1715455088
+    },
+    {
+      "code": "00891",
+      "name": "中信關鍵半導體",
+      "traded_value": 1654986751
+    },
+    {
+      "code": "00927",
+      "name": "群益半導體收益",
+      "traded_value": 1454987651
     },
     {
       "code": "00922",
       "name": "國泰台灣領袖50",
-      "traded_value": 790806712
+      "traded_value": 1439297251
     },
     {
-      "code": "00892",
-      "name": "富邦台灣半導體",
-      "traded_value": 653536707
+      "code": "00935",
+      "name": "野村臺灣新科技50",
+      "traded_value": 1323550727
     },
     {
-      "code": "009828",
-      "name": "中信台日韓PCB",
-      "traded_value": 645690911
+      "code": "00982A",
+      "name": "主動群益台灣強棒",
+      "traded_value": 1043310829
     },
     {
-      "code": "00405A",
-      "name": "主動富邦台灣龍耀",
-      "traded_value": 642182550
-    },
-    {
-      "code": "00712",
-      "name": "復華富時不動產",
-      "traded_value": 639286484
-    },
-    {
-      "code": "00407A",
-      "name": "主動凱基台灣",
-      "traded_value": 576699879
-    },
-    {
-      "code": "00708L",
-      "name": "期元大S&P黃金正2",
-      "traded_value": 575241256
-    },
-    {
-      "code": "00415A",
-      "name": "主動群益核心50",
-      "traded_value": 510667850
+      "code": "00400A",
+      "name": "主動國泰動能高息",
+      "traded_value": 1038797013
     },
     {
       "code": "00662",
       "name": "富邦NASDAQ",
-      "traded_value": 484043482
+      "traded_value": 975424678
     },
     {
-      "code": "00637L",
-      "name": "元大滬深300正2",
-      "traded_value": 427893562
+      "code": "00953B",
+      "name": "群益優選非投等債",
+      "traded_value": 967804539
     },
     {
-      "code": "00715L",
-      "name": "期街口布蘭特正2",
-      "traded_value": 424126051
-    },
-    {
-      "code": "00753L",
-      "name": "中信中國50正2",
-      "traded_value": 422513989
-    },
-    {
-      "code": "00980A",
-      "name": "主動野村臺灣優選",
-      "traded_value": 407764689
+      "code": "00673R",
+      "name": "期元大S&P原油反1",
+      "traded_value": 813380423
     },
     {
       "code": "00713",
       "name": "元大台灣高息低波",
-      "traded_value": 394794921
+      "traded_value": 791405461
     },
     {
-      "code": "00985A",
-      "name": "主動野村台灣50",
-      "traded_value": 365946878
-    },
-    {
-      "code": "00665L",
-      "name": "富邦恒生國企正2",
-      "traded_value": 360164885
-    },
-    {
-      "code": "00947",
-      "name": "台新臺灣IC設計",
-      "traded_value": 355152956
+      "code": "00892",
+      "name": "富邦台灣半導體",
+      "traded_value": 615053318
     },
     {
       "code": "00988A",
       "name": "主動統一全球創新",
-      "traded_value": 304447805
+      "traded_value": 609273079
     },
     {
-      "code": "00882",
-      "name": "中信中國高股息",
-      "traded_value": 278847691
+      "code": "00646",
+      "name": "元大S&P500",
+      "traded_value": 603626233
     },
     {
-      "code": "009829",
-      "name": "大華韓國KOSPI50",
-      "traded_value": 277315079
+      "code": "00670L",
+      "name": "富邦NASDAQ正2",
+      "traded_value": 602864373
+    },
+    {
+      "code": "00985A",
+      "name": "主動野村台灣50",
+      "traded_value": 592154461
+    },
+    {
+      "code": "00405A",
+      "name": "主動富邦台灣龍耀",
+      "traded_value": 590374568
     },
     {
       "code": "00865B",
       "name": "國泰US短期公債",
-      "traded_value": 268837166
+      "traded_value": 566601843
+    },
+    {
+      "code": "009828",
+      "name": "中信台日韓PCB",
+      "traded_value": 565908846
+    },
+    {
+      "code": "00712",
+      "name": "復華富時不動產",
+      "traded_value": 551454465
+    },
+    {
+      "code": "00708L",
+      "name": "期元大S&P黃金正2",
+      "traded_value": 547815465
+    },
+    {
+      "code": "00407A",
+      "name": "主動凱基台灣",
+      "traded_value": 523379695
+    },
+    {
+      "code": "00980A",
+      "name": "主動野村臺灣優選",
+      "traded_value": 443006070
+    },
+    {
+      "code": "00940",
+      "name": "元大台灣價值高息",
+      "traded_value": 402238516
+    },
+    {
+      "code": "00947",
+      "name": "台新臺灣IC設計",
+      "traded_value": 391691481
+    },
+    {
+      "code": "00882",
+      "name": "中信中國高股息",
+      "traded_value": 386442536
+    },
+    {
+      "code": "00984D",
+      "name": "主動聯博全球非投",
+      "traded_value": 354198030
     },
     {
       "code": "00923",
       "name": "群益台ESG低碳50",
-      "traded_value": 263497665
+      "traded_value": 350012435
+    },
+    {
+      "code": "00637L",
+      "name": "元大滬深300正2",
+      "traded_value": 345732727
+    },
+    {
+      "code": "009829",
+      "name": "大華韓國KOSPI50",
+      "traded_value": 337770353
     }
   ]
 }
