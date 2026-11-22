@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-11-22T10:46:12.648297+08:00",
-  "finished_at": "2026-11-22T10:49:29.712804+08:00",
+  "started_at": "2026-11-22T22:26:13.257336+08:00",
+  "finished_at": "2026-11-22T22:29:29.417559+08:00",
   "trigger": "github",
   "status": "warning",
   "host": "runnervm0hi8g",
