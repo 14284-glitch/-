@@ -1,9 +1,9 @@
 {
-  "started_at": "2026-11-26T12:38:05.791657+08:00",
-  "finished_at": "2026-11-26T12:40:38.715966+08:00",
+  "started_at": "2026-11-27T00:43:48.792607+08:00",
+  "finished_at": "2026-11-27T00:46:17.446189+08:00",
   "trigger": "github",
   "status": "warning",
-  "host": "runnervm0hi8g",
+  "host": "ip-10-0-129-245",
   "steps": [
     {
       "name": "更新財經新聞",
